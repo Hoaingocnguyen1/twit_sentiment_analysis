@@ -1,0 +1,27 @@
+stages:
+  crawl_tweets:
+    cmd: python notebooks/data_ingestion_test.ipynb
+    deps:
+      - notebooks/data_ingestion_test.ipynb
+    outs:
+      - data/raw/raw.json
+
+  upload_to_blob:
+    cmd: python src/upload_to_blob.py
+    deps:
+      - data/raw/raw.json
+      - params.yaml
+    params:
+      - azure.conn_str
+    outs:
+      - logs/upload_log.txt
+
+  load_to_postgres:
+    cmd: python src/load_to_postgres.py
+    deps:
+      - data/raw/raw.json
+      - params.yaml
+    params:
+      - postgres.conn_str
+    outs:
+      - logs/postgres_log.txt

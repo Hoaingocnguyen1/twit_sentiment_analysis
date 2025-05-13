@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+*.pyc
+__pycache__/
+
+# Environment / Secrets
+.env
+testvm_key.pem
+cookies.json
+credentials.env
+
+# VSCode or other editor folders (optional)
+.vscode/
+.idea/
+azure-fucntion-app/
+azure-web-hook/
+mlflow/artifact/data
+mlflow/artifact/models
+
+
+# Logs (nếu muốn)
+logs/
+*.log

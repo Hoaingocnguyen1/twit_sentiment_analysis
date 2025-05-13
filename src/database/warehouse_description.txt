@@ -1,0 +1,52 @@
+-- 1. Bảng tweet_staging: lưu dữ liệu đã clean, chờ inference và chỉ giữ tối đa 7 ngày
+CREATE TABLE tweet_staging (
+    -- Khóa tự tăng, duy nhất, định danh bản ghi staging
+    id                   SERIAL       PRIMARY KEY,
+    -- ID gốc của tweet từ API, đảm bảo không lưu trùng
+    tweet_id             VARCHAR(50)  UNIQUE NOT NULL,
+    -- Quốc gia/tỉnh thành mà tweet liên quan (nếu có)
+    country              VARCHAR(100),
+    -- Chủ đề hoặc nhóm tin tức liên quan đến tweet
+    topic                VARCHAR(255),
+    -- Nội dung đã được làm sạch (clean) sẵn sàng cho inference NLP
+    content              TEXT         NOT NULL,
+    -- Thời điểm tweet gốc đc tạo
+    created_at           TIMESTAMP    NOT NULL ,
+    -- Thời điểm bản ghi cuối cùng được cập nhật (trigger tự động set)
+    updated_at           TIMESTAMP    NOT NULL DEFAULT NOW(),
+    -- Cờ đánh dấu đã inference xong hay chưa (FALSE = chưa, TRUE = đã hoàn thành)
+    inference_done       BOOLEAN      NOT NULL DEFAULT FALSE,
+    -- Lưu thời gian chính xác khi inference hoàn thành
+    inferred_at          TIMESTAMP,
+    -- Cờ đánh dấu đã chuyển dữ liệu sang bảng product
+    moved_to_product     BOOLEAN      NOT NULL DEFAULT FALSE,
+    -- Thời điểm dữ liệu được chuyển sang bảng product
+    moved_at             TIMESTAMP
+);
+
+
+-- 2. Bảng tweet_product: lưu kết quả cuối cùng, giữ vĩnh viễn để phục vụ phân tích và báo cáo
+CREATE TABLE tweet_product (
+    -- Khóa tự tăng, định danh bản ghi product
+    id                   SERIAL       PRIMARY KEY,
+    -- Tham chiếu về bản ghi gốc trong staging để audit lineage
+    staging_id           INT          NOT NULL REFERENCES tweet_staging(id),
+    -- ID gốc của tweet, đảm bảo không trùng
+    tweet_id             VARCHAR(50)  UNIQUE NOT NULL,
+    -- Quốc gia/tỉnh thành (giá trị copy từ staging)
+    country              VARCHAR(100),
+    -- Chủ đề hoặc nhóm tin tức (copy từ staging)
+    topic                VARCHAR(255),
+    -- Nội dung gốc (nếu cần audit, có thể null nếu không cần)
+    content              TEXT,
+    -- Điểm confidence của model sau khi inference
+    sentiment_score      FLOAT,
+    -- Nhãn sentiment (ví dụ: 0 = negative, 1 = neutral, 2 = positive)
+    predicted_sentiment  INT,
+    -- Thời điểm dữ liệu được chuyển từ staging vào product
+    processed_at         TIMESTAMP    NOT NULL DEFAULT NOW(),
+    -- Giữ lại created_at từ bản staging để truy nguyên thời gian tweet gốc
+    created_at           TIMESTAMP    NOT NULL,
+    -- Thời điểm bản ghi product cuối cùng được cập nhật
+    updated_at           TIMESTAMP    NOT NULL DEFAULT NOW()
+);

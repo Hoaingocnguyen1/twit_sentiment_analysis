@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "POSTGRES_CONNECTION_STRING": "postgresql+psycopg2://hoaingocnguyen:Hn20052004!@testtwdb.postgres.database.azure.com:5432/postgres?sslmode=require",
+    "MLFLOW_TRACKING_URI": "http://mlflow-server:5000",
+    "MODEL_NAME": "sentiment-model",
+    "MODEL_VERSION": "latest",
+    "LAKE_STORAGE_CONN_STR": ""
+  }
+} 
