@@ -17,7 +17,7 @@ entry_points:
       batch_size: {type: int, default: 16}
       learning_rate: {type: float, default: 5e-05}
       finetune: {type: bool, default: True}
-      experiment_name: {type: str, default: "sentiment-analysis"}
+      experiment_name: {type: str, default: "sentiment-analysis-training"}
     command: >
       python scripts/train.py --model-name {model_name} --version {version} --train-texts {train_texts} --train-labels {train_labels} --eval-texts {eval_texts} --eval-labels {eval_labels} --epochs {epochs} --batch-size {batch_size} --learning-rate {learning_rate} --finetune {finetune} --experiment-name {experiment_name}
 
@@ -32,23 +32,19 @@ entry_points:
       experiment_name: {type: str, default: "model-validation"}
       promote_to_prod: {type: bool, default: True}
       min_accuracy: {type: float, default: 0.7}
+      from_blob: {type: bool, default: True}
     command: >
-      python scripts/validate.py --model-name {model_name} --version {version} --stage {stage} --eval-texts {eval_texts} --eval-labels {eval_labels} --batch-size {batch_size} --experiment-name {experiment_name} --promote-to-prod {promote_to_prod} --min-accuracy {min_accuracy}
+      python scripts/validate.py --model-name {model_name} --version {version} --stage {stage} --eval-texts {eval_texts} --eval-labels {eval_labels} --batch-size {batch_size} --experiment-name {experiment_name} --promote-to-prod {promote_to_prod} --min-accuracy {min_accuracy} --from-blob {from_blob}
 
-  # serve:
-  #   parameters:
-  #     model_name: {type: str}
-  #     version: {type: str, default: null}
-  #     stage: {type: str, default: "Production"}
-  #     host: {type: }
-  #     port: {type: int, default: 8000}
-  #   command: >
-  #     python sentiment_api/app/main.py
-  #       --model_name {model_name}
-  #       --version {version}
-  #       --stage {stage}
-  #       --host {host}
-  #       --port {port}
+  serve:
+    parameters:
+      model_name: {type: str, description: "MLflow model name"}
+      version: {type: str, default: null, description: "Model version"}
+      stage: {type: str, default: "Production", description: "Model stage"}
+      host: {type: str, default: "0.0.0.0", description: "Host to bind"}
+      port: {type: int, default: 8000, description: "Port to bind"}
+    command: >
+      python main.py --model-name {model_name} --version {version} --stage {stage} --host {host} --port {port}
 
 
   hf_baseline:

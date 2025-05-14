@@ -15,6 +15,7 @@ azure-fucntion-app/
 azure-web-hook/
 mlflow/artifact/data
 mlflow/artifact/models
+mlruns/
 
 
 # Logs (nếu muốn)

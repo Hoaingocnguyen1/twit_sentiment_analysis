@@ -1,50 +1,16 @@
-# name: twit-sentiment-group-2
-# channels:
-#   - defaults
-#   - conda-forge
-# dependencies:
-#   - python=3.12
-#   - pip
-#   - sentencepiece
-#   - tiktoken
-#   - pip:
-#       - mlflow>=2.10.0
-#       - torch>=2.2.0          # install CPU-only PyTorch via pip
-#       - torchvision   # CPU-only torchvision via pip
-#       - transformers>=4.37.0
-#       - numpy>=1.26.0
-#       - pandas>=2.2.0
-#       - scikit-learn>=1.4.0
-#       - azure-storage-blob>=12.19.0
-#       - azure-identity>=1.15.0
-#       - psycopg2-binary>=2.9.9
-#       - python-dotenv>=1.0.0
-#       - typing-extensions>=4.9.0
-#       - matplotlib>=3.8.0
-#       - seaborn>=0.13.0
-#       - tqdm>=4.66.0
-#       - fastapi>=0.109.0
-#       - uvicorn>=0.27.0
-#       - pydantic>=2.6.0
-#       - python-multipart>=0.0.7
-
-
-name: twit-sentiment-gpu
+name: twit-sentiment-group-2
 channels:
   - defaults
   - conda-forge
-  - pytorch
-  - nvidia
 dependencies:
   - python=3.12
-  - cudatoolkit=11.8            # CUDA runtime
-  - pytorch>=2.2.0              # sẽ lấy bản GPU tương thích cudatoolkit
-  - torchvision
+  - pip
   - sentencepiece
   - tiktoken
-  - pip
   - pip:
       - mlflow>=2.10.0
+      - torch>=2.2.0          # install CPU-only PyTorch via pip
+      - torchvision   # CPU-only torchvision via pip
       - transformers>=4.37.0
       - numpy>=1.26.0
       - pandas>=2.2.0
@@ -61,3 +27,37 @@ dependencies:
       - uvicorn>=0.27.0
       - pydantic>=2.6.0
       - python-multipart>=0.0.7
+
+
+# name: twit-sentiment-gpu
+# channels:
+#   - defaults
+#   - conda-forge
+#   - pytorch
+#   - nvidia
+# dependencies:
+#   - python=3.12
+#   - cudatoolkit=11.8            # CUDA runtime
+#   - pytorch>=2.2.0              # sẽ lấy bản GPU tương thích cudatoolkit
+#   - torchvision
+#   - sentencepiece
+#   - tiktoken
+#   - pip
+#   - pip:
+#       - mlflow>=2.10.0
+#       - transformers>=4.37.0
+#       - numpy>=1.26.0
+#       - pandas>=2.2.0
+#       - scikit-learn>=1.4.0
+#       - azure-storage-blob>=12.19.0
+#       - azure-identity>=1.15.0
+#       - psycopg2-binary>=2.9.9
+#       - python-dotenv>=1.0.0
+#       - typing-extensions>=4.9.0
+#       - matplotlib>=3.8.0
+#       - seaborn>=0.13.0
+#       - tqdm>=4.66.0
+#       - fastapi>=0.109.0
+#       - uvicorn>=0.27.0
+#       - pydantic>=2.6.0
+#       - python-multipart>=0.0.7

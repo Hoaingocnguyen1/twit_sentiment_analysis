@@ -1,4 +1,4 @@
-?!/usr/bin/env bash
+# ?!/usr/bin/env bash
 # scripts/run_mlflow_project.sh – run MLflow project with reusable conda env
 # Usage:
 #   ./scripts/run_mlflow_project.sh [--param1 value1 ...]

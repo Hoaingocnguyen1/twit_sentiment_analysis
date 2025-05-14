@@ -1,4 +1,5 @@
-from mlflow.scripts.registry import ModelRegistry
+# from ...scripts.registry import ModelRegistry
+from scripts.registry import ModelRegistry
 from typing import Optional
 import logging
 import os
@@ -19,22 +20,26 @@ def get_model_manager() -> ModelRegistry:
     global model_manager
     if model_manager is None:
         try:
+            logger.info(f"Initializing model manager with model={MODEL_NAME}, version={MODEL_VERSION}, stage={MODEL_STAGE}")
             registry = ModelRegistry()
+            
             # Load model based on version or stage
             if MODEL_VERSION:
                 manager = registry.load_model(
                     model_name=MODEL_NAME,
                     version=MODEL_VERSION
                 )
+                logger.info(f"Loaded model {MODEL_NAME} version {MODEL_VERSION}")
             else:
                 manager = registry.load_model(
                     model_name=MODEL_NAME,
                     stage=MODEL_STAGE
                 )
+                
                 # Retrieve and log latest version
                 latest = registry.get_latest_version(MODEL_NAME)
                 logger.info(f"Auto-chosen latest version: {latest}")
-            
+                    
             model_manager = manager
         except Exception as e:
             logger.error(f"Error initializing model: {e}")

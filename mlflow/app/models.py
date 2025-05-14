@@ -14,6 +14,22 @@ class TextInput(BaseModel):
         }
     }
 
+class BatchTextInput(BaseModel):
+    """Input model for batch sentiment analysis"""
+    texts: Annotated[List[str], Field(description="List of texts to analyze for sentiment")]
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "texts": [
+                    "I really enjoyed this movie, it was fantastic!",
+                    "The service was terrible and the food was cold.",
+                    "The weather is nice today."
+                ]
+            }
+        }
+    }
+
 class SentimentScore(BaseModel):
     """Model for individual sentiment scores"""
     label: Annotated[str, Field(description="Sentiment label")]
@@ -36,6 +52,10 @@ class SentimentResponse(BaseModel):
             }
         }
     }
+
+class BatchSentimentResponse(BaseModel):
+    """Response model for batch sentiment analysis"""
+    results: Annotated[List[SentimentResponse], Field(description="List of sentiment analysis results")]
 
 class ErrorResponse(BaseModel):
     """Error response model"""
