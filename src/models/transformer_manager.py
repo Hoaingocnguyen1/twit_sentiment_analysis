@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import mlflow.transformers
 import numpy as np
@@ -127,9 +127,9 @@ class ModelManager:
             "confusion_matrix": confusion_matrix_fig
         }
 
-    def evaluate(self, dataset: Dataset) -> Dict[str, Any]:
+    def evaluate(self, dataset: Dataset,batch_size) -> Dict[str, Any]:
         assert self.model is not None, "Model not loaded"
-        loader = DataLoader(dataset, batch_size=32, collate_fn=default_data_collator)
+        loader = DataLoader(dataset, batch_size=batch_size, collate_fn=default_data_collator)
         self.model.eval()
 
         all_preds, all_labels = [], []
@@ -258,3 +258,26 @@ class ModelManager:
     def save(self, **kwargs):
         """Convenience method that calls save_model with the same parameters"""
         return self.save_model(**kwargs)
+    
+    def predict_batch(self, texts: List[str]) -> List[int]:
+        """
+        Nhận vào list các chuỗi `texts`, trả về list các index label có xác suất cao nhất.
+        Ví dụ với 2 câu: ["...", "..."] sẽ return [2, 1]
+        """
+        # Tokenize + chạy model giống hệt predict_batch nhưng không cần build dict
+        inputs = self.tokenizer(
+            texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=self.tokenizer.model_max_length
+        ).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            # logits shape: (batch_size, num_labels)
+            probs = softmax(outputs.logits, dim=-1).cpu().numpy()
+
+        # np.argmax lấy index của giá trị lớn nhất trên mỗi hàng (mỗi mẫu)
+        top_indices = np.argmax(probs, axis=1)
+        return top_indices.tolist()

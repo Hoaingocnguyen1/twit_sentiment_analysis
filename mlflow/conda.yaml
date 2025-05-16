@@ -12,6 +12,7 @@ dependencies:
       - torch>=2.2.0          # install CPU-only PyTorch via pip
       - torchvision   # CPU-only torchvision via pip
       - transformers>=4.37.0
+      - accelerate>=0.25.0  
       - numpy>=1.26.0
       - pandas>=2.2.0
       - scikit-learn>=1.4.0
