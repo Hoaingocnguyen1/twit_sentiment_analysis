@@ -1,6 +1,9 @@
 import mlflow
 import os
 import sys
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from typing import Optional, List, Dict, Any
 import logging
@@ -8,8 +11,10 @@ from datetime import datetime
 import json
 from src.models.transformer_manager import ModelManager
 from config.dataClient import get_blob_storage
+import torch
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class ModelRegistry:
     def __init__(
@@ -129,7 +134,7 @@ class ModelRegistry:
             logger.error(f"Error adding aliases: {e}")
             raise
 
-    def save_model_artifacts(self, model_manager: ModelManager, run_id: str) -> None:
+    def save_model_artifacts(self, model_manager: ModelManager, run_id: str, task: str = "text-classification") -> None:
         """Save model artifacts to MLflow run"""
         try:
             # Save model and tokenizer
@@ -139,12 +144,13 @@ class ModelRegistry:
                     "tokenizer": model_manager.tokenizer
                 },
                 artifact_path="model",
-                run_id=run_id
+                run_id=run_id,
+                task=task
             )
 
             # Save model config
             if hasattr(model_manager.model, "config"):
-                config_path = os.path.join(model_manager.output_dir, "config.json")
+                config_path = os.path.join(model_manager.output_dir, "config_model.json")
                 model_manager.model.config.to_json_file(config_path)
                 mlflow.log_artifact(config_path, run_id=run_id)
 
@@ -155,48 +161,65 @@ class ModelRegistry:
             raise
 
     def load_model(
-        self,
-        model_name: str,
-        version: Optional[str] = None,
-        stage: str = "Production"
-    ) -> "ModelManager":
-        """Load a model from registry, fallback with repo_type if needed."""
-        # Build MLflow model URI
-        model_uri = f"models:/{model_name}/{version or stage}"
-        logger.info(f"Loading from MLflow URI: {model_uri}")
-
-        # Try loading via MLflow transformers
-        try:
-            loaded = mlflow.transformers.load_model(model_uri)
-        except ValueError as e:
-            if "Repo id must be in the form" in str(e):
-                logger.warning("Retrying with repo_type='model'")
-                loaded = mlflow.transformers.load_model(
-                    model_uri,
-                    repo_type="model"
+            self,
+            model_name: str,
+            model_path: Optional[str] = None,
+            version: Optional[str] = None,
+            stage: str = "Production"
+        ) -> "ModelManager":
+            """Load from local path if provided, otherwise from MLflow registry"""
+            # 1) If local model path specified, load directly
+            if model_path:
+                logger.info(f"Loading model from local path: {model_path}")
+                # Try loading local directory
+                model_obj = AutoModelForSequenceClassification.from_pretrained(
+                    model_path,
+                    local_files_only=True,
+                    device_map='cuda:0' if torch.cuda.is_available() else 'cpu'
                 )
+                tokenizer_obj = AutoTokenizer.from_pretrained(
+                    model_path,
+                    local_files_only=True,
+                    device_map='cuda:0' if torch.cuda.is_available() else 'cpu'
+                )
+                return ModelManager(
+                    model_name=model_name,
+                    model_path=model_path,
+                    finetune=False,
+                    model_obj=model_obj,
+                    tokenizer_obj=tokenizer_obj
+                )
+
+            # 2) Otherwise load from MLflow model registry
+            model_uri = f"models:/{model_name}/{version or stage}"
+            logger.info(f"Loading from MLflow URI: {model_uri}")
+
+            try:
+                loaded = mlflow.transformers.load_model(model_uri)
+            except ValueError as e:
+                if "Repo id must be in the form" in str(e):
+                    logger.warning("Retrying with repo_type='model'")
+                    loaded = mlflow.transformers.load_model(model_uri, repo_type="model")
+                else:
+                    logger.error(f"Loading failed: {e}")
+                    raise
+
+            # Extract model and tokenizer
+            if isinstance(loaded, dict):
+                model_obj = loaded.get("model")
+                tokenizer_obj = loaded.get("tokenizer")
+            elif hasattr(loaded, "model") and hasattr(loaded, "tokenizer"):
+                model_obj = loaded.model
+                tokenizer_obj = loaded.tokenizer
             else:
-                logger.error(f"Loading failed: {e}")
-                raise
+                raise RuntimeError("Loaded object does not contain model and tokenizer")
 
-                # Determine how to extract model and tokenizer
-        if isinstance(loaded, dict):
-            model_obj = loaded.get("model")
-            tokenizer_obj = loaded.get("tokenizer")
-        elif hasattr(loaded, "model") and hasattr(loaded, "tokenizer"):
-            model_obj = loaded.model
-            tokenizer_obj = loaded.tokenizer
-        else:
-            raise RuntimeError("Loaded object does not contain model and tokenizer")
-
-        # Instantiate manager with preloaded objects
-        manager = ModelManager(
-            model_path=model_uri,
-            finetune=False,
-            model_obj=model_obj,
-            tokenizer_obj=tokenizer_obj
-        )
-        return manager
+            # Wrap in ModelManager and return
+            return ModelManager(
+                model_path=model_uri,
+                finetune=False,
+                model_obj=model_obj,
+                tokenizer_obj=tokenizer_obj)
 
     def list_models(self) -> List[Dict]:
         try:
@@ -242,28 +265,4 @@ class ModelRegistry:
             logger.info(f"Deleted {model_name} v{version}")
         except Exception as e:
             logger.error(f"Error deleting model version: {e}")
-            raise
-
-    def save_model(self, model, tokenizer, output_dir: str) -> None:
-        """
-        Save model and tokenizer then upload the entire directory to Azure Blob (if blob_storage is configured).
-        """
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-            # Save locally
-            model.save_pretrained(output_dir)
-            tokenizer.save_pretrained(output_dir)
-            logger.info(f"Saved model locally at {output_dir}")
-
-            if self.blob_storage:
-                # Assuming BlobStorage has upload_directory method
-                self.blob_storage.upload_directory(
-                    container_name="artifact",
-                    local_path=output_dir,
-                    remote_path=os.path.basename(output_dir)
-                )
-                logger.info(f"Uploaded artifacts from {output_dir} to Blob container 'artifact'")
-
-        except Exception as e:
-            logger.error(f"Error saving/uploading model: {e}")
             raise

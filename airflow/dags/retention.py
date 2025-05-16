@@ -24,7 +24,7 @@ with DAG(
     delete_old_data_task = DeleteOldDataOperator(
         task_id='delete_old_data',
         table_names=['TWEET_STAGING', 'TWEET_PRODUCT'],  # Các bảng cần xóa
-        date_column='date_created',  # Cột ngày để lọc dữ liệu
+        date_column='created_at',  # Cột ngày để lọc dữ liệu
         days_to_keep=7  # Số ngày cần giữ lại dữ liệu
     )
 

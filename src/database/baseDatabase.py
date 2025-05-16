@@ -2,7 +2,7 @@ import psycopg2
 from psycopg2 import sql, extras
 from azure.storage.blob import BlobServiceClient
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union, Any, Tuple
 import json
 import os
 import logging
@@ -81,26 +81,69 @@ class Database:
             print(f"Error fetching columns for table '{table_name}': {e}")
             return []
 
-    def read(self, table_name: str, columns: Optional[List[str]] = None, conditions: Optional[Dict[str, any]] = None, limit: Optional[int] = None):
+
+    def read(
+        self,
+        table_name: str,
+        columns: Optional[List[str]] = None,
+        conditions: Optional[Dict[str, Union[Any, Tuple[str, Any]]]] = None,
+        limit: Optional[int] = None,
+        order_by: Optional[str] = None,
+        descending: bool = True
+    ):
         """
         Read data from the specified table.
 
         :param table_name: Name of the table.
         :param columns: List of columns to fetch (default: all columns).
-        :param conditions: Dictionary of conditions for the WHERE clause.
+        :param conditions: Dict of conditions (value or (op, value)).
         :param limit: Maximum number of rows to fetch.
+        :param order_by: Column name to sort by.
+        :param descending: If True, use DESC; else ASC.
         :return: List of rows.
         """
-        columns_sql = sql.SQL(", ").join(map(sql.Identifier, columns)) if columns else sql.SQL("*")
-        query = sql.SQL("SELECT {} FROM {}").format(columns_sql, sql.Identifier(table_name))
+        # SELECT … 
+        columns_sql = (
+            sql.SQL(", ").join(map(sql.Identifier, columns))
+            if columns else sql.SQL("*")
+        )
+        query = sql.SQL("SELECT {} FROM {}").format(
+            columns_sql, sql.Identifier(table_name)
+        )
+
+        # WHERE …
+        params: Dict[str, Any] = {}
         if conditions:
-            where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(
-                sql.Composed([sql.Identifier(k), sql.SQL(" = "), sql.Placeholder(k)]) for k in conditions.keys()
-            )
-            query += where_clause
+            clauses = []
+            for col, cond in conditions.items():
+                if isinstance(cond, tuple) and len(cond) == 2:
+                    op, value = cond
+                else:
+                    op, value = "=", cond
+                clauses.append(
+                    sql.Composed([
+                        sql.Identifier(col),
+                        sql.SQL(f" {op} "),
+                        sql.Placeholder(col)
+                    ])
+                )
+                params[col] = value
+            query += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(clauses)
+
+        # ORDER BY …
+        if order_by:
+            direction = sql.SQL("DESC") if descending else sql.SQL("ASC")
+            query += sql.SQL(" ORDER BY {} ").format(sql.Identifier(order_by)) + direction
+
+        # LIMIT …
         if limit:
             query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
-        return self._fetch_query(query, f"Error reading data from {table_name}", conditions)
+
+        return self._fetch_query(
+            query,
+            f"Error reading data from {table_name}",
+            params
+        )
 
     def update(self, table_name: str, updates: Dict[str, any], conditions: Dict[str, any]):
         """
@@ -173,35 +216,40 @@ class Database:
         self.connection.close()
 
     def batch_insert(self, table_name: str, tweets_data: list, column_mapping: dict):
-            """
-            Insert multiple records into a table based on column mapping.
+        """
+        Insert multiple records into a table based on column mapping.
 
-            :param table_name: Name of the table.
-            :param tweets_data: List of dictionaries containing tweet data.
-            :param column_mapping: Dictionary mapping input fields to database columns.
-            """
-            try:
-                # Map input fields to database columns
-                columns = list(column_mapping.values())
+        :param table_name: Name of the table.
+        :param tweets_data: List of dictionaries containing tweet data.
+        :param column_mapping: Mapping of input keys to DB columns.
+        """
+        if not tweets_data:
+            logging.info("No data provided for batch insert.")
+            return
 
-                # Prepare data for insertion
-                values = [
-                    tuple(tweet[field] for field in column_mapping.keys())
-                    for tweet in tweets_data
-                ]
+        try:
+            # Extract column names from mapping
+            columns = list(column_mapping.values())
 
-                # Use psycopg2.extras.execute_values for batch insert
-                insert_query = sql.SQL("INSERT INTO {} ({}) VALUES %s").format(
-                    sql.Identifier(table_name),
-                    sql.SQL(", ").join(map(sql.Identifier, columns))
-                )
-                extras.execute_values(self.cursor, insert_query, values)
-                self.connection.commit()
-                print(f"Successfully inserted {len(tweets_data)} records into {table_name}.")
-            except Exception as e:
-                self.connection.rollback()
-                print(f"Error inserting batch data into {table_name}: {e}")
-                raise
+            # Prepare values
+            values = [
+                tuple(tweet[field] for field in column_mapping.keys())
+                for tweet in tweets_data
+            ]
+
+            insert_query = sql.SQL("INSERT INTO {} ({}) VALUES %s").format(
+                sql.Identifier(table_name),
+                sql.SQL(", ").join(map(sql.Identifier, columns))
+            )
+
+            extras.execute_values(self.cursor, insert_query, values)
+            self.connection.commit()
+            logging.info(f"Successfully inserted {len(tweets_data)} records into {table_name}.")
+        except Exception as e:
+            self.connection.rollback()
+            logging.error(f"Error inserting batch data into {table_name}: {e}")
+            raise
+
 
 
 class BlobStorage:

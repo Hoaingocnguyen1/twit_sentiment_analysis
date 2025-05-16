@@ -13,7 +13,6 @@ def pull_staging(container_name, file_path, column_mapping_path, **context):
     :param context: Airflow context dictionary containing parameters like conn_str, container, file_path, and db_config.
     """
     try:
-        # Đọc column mapping từ file JSON (DVC tracking)
         if not os.path.exists(column_mapping_path):
             raise FileNotFoundError(f"Column mapping file '{column_mapping_path}' does not exist.")
         with open(column_mapping_path, 'r', encoding='utf-8') as f:

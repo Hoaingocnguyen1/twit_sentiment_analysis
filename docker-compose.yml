@@ -21,7 +21,8 @@ x-airflow-common: &airflow-common
     - ./airflow/plugins:/opt/airflow/plugins
     - ./src:/opt/airflow/src
     - ./config:/opt/airflow/config
-    - ./airflow/requirements.txt:/requirements.txt
+    # - ./mlflow:/opt/airflow/mlflow
+    # - ./airflow/requirements.txt:/requirements.  #Hnhu ko can 
     - ./config/cookies.json:/opt/airflow/cookies.json
     - ./.env:/opt/airflow/.env
 
