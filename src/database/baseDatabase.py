@@ -203,6 +203,64 @@ class Database:
                 print(f"Error inserting batch data into {table_name}: {e}")
                 raise
 
+    def create_index(self, table_name, index_name, columns):
+        """
+        Tạo chỉ mục (index) nếu chưa tồn tại.
+        :param table_name: tên bảng
+        :param index_name: tên index
+        :param columns: danh sách cột hoặc tuple
+        """
+        cols_sql = sql.SQL(', ').join(map(sql.Identifier, columns))
+        query = sql.SQL('CREATE INDEX IF NOT EXISTS {} ON {} ({})').format(
+            sql.Identifier(index_name),
+            sql.Identifier(table_name),
+            cols_sql
+        )
+        try:
+            self.cursor.execute(query)
+            self.connection.commit()
+        except Exception as e:
+            self.rollback()
+            print(f"Error creating index {index_name} on {table_name}: {e}")
+
+    def create_trigger(self, table_name, trigger_name, function_name, function_body,
+                       timing='BEFORE', event='UPDATE', for_each='ROW'):
+        """
+        Tạo trigger function và trigger cho bảng.
+        :param table_name: tên bảng
+        :param trigger_name: tên trigger
+        :param function_name: tên hàm trigger
+        :param function_body: nội dung PL/pgSQL của hàm
+        :param timing: BEFORE hoặc AFTER
+        :param event: INSERT, UPDATE, DELETE hoặc hỗn hợp (vd: 'INSERT OR UPDATE')
+        :param for_each: ROW hoặc STATEMENT
+        """
+        # Tạo hàm trigger
+        func_query = sql.SQL(
+            'CREATE OR REPLACE FUNCTION {}() RETURNS TRIGGER AS $$ {} $$ LANGUAGE plpgsql'
+        ).format(
+            sql.Identifier(function_name),
+            sql.SQL(function_body)
+        )
+        # Tạo trigger
+        trigger_query = sql.SQL(
+            'CREATE TRIGGER {} {} {} ON {} FOR EACH {} EXECUTE PROCEDURE {}()'
+        ).format(
+            sql.Identifier(trigger_name),
+            sql.SQL(timing),
+            sql.SQL(event),
+            sql.Identifier(table_name),
+            sql.SQL(for_each),
+            sql.Identifier(function_name)
+        )
+        try:
+            self.cursor.execute(func_query)
+            self.cursor.execute(trigger_query)
+            self.connection.commit()
+        except Exception as e:
+            self.rollback()
+            print(f"Error creating trigger {trigger_name} on {table_name}: {e}")
+
 
 class BlobStorage:
     """

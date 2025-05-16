@@ -1,7 +1,7 @@
 # # --- common environment for Airflow services ---
 x-airflow-common-env: &airflow-common-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://hoaingocnguyen:Hn20052004!@testtwdb.postgres.database.azure.com:5432/postgres?sslmode=require
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://hoaingocnguyen:Hn20052004!@twitwarehouse.postgres.database.azure.com:5432/postgres?sslmode=require
   AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
   AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
   AIRFLOW__CORE__PLUGINS_FOLDER: /opt/airflow/plugins

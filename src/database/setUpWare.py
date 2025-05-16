@@ -19,7 +19,6 @@ tweet_staging = {
     'content': 'TEXT NOT NULL',
     'crawl_at': 'TIMESTAMP NOT NULL',
     'created_at': 'TIMESTAMP NOT NULL',
-    'sentiment_score': 'FLOAT DEFAULT NULL',
     'predicted_sentiment': 'INT DEFAULT NULL',
     'updated_at': 'TIMESTAMP NOT NULL DEFAULT NOW()',
     'moved_to_product': 'BOOLEAN NOT NULL DEFAULT FALSE',
@@ -33,7 +32,6 @@ tweet_staging = {
 tweet_product = {
     'staging_tweet_id': 'BIGINT PRIMARY KEY REFERENCES "TWEET_STAGING"(tweet_id)',  # Thay INT bằng BIGINT
     'topic': 'VARCHAR(255) NOT NULL',
-    'sentiment_score': 'FLOAT NOT NULL',
     'predicted_sentiment': 'INT NOT NULL',
     'updated_at': 'TIMESTAMP NOT NULL DEFAULT NOW()',
     'created_at': 'TIMESTAMP NOT NULL',
