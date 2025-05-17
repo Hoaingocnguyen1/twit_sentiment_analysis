@@ -14,10 +14,9 @@ logging.basicConfig(
 
 # Define containers and required blobs
 setup = {
-'data': ['raw', 'clean', 'sentiment'],
+'data': ['raw', 'clean'],
 'artifact': [],  # add blobs as needed
-'logs': [],            # e.g. 'process.log'
-'error': []           # e.g. 'error.log'
+'logs': []
 }
 
 
