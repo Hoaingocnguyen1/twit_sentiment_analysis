@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+# !/usr/bin/env bash
 # install_env.sh – Provision host with Docker (v20.10+), Compose v2 plugin, Miniconda
 # Usage: sudo bash scripts/install_env.sh
 
@@ -23,79 +23,79 @@ else
 fi
 
 #── Update & Install APT Prereqs ────────────────────────────────────────────────
-install_prereqs_debian() {
-  info "Updating apt and installing prerequisites..."
-  apt-get update -y
-  apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg lsb-release
-}
+# install_prereqs_debian() {
+#   info "Updating apt and installing prerequisites..."
+#   apt-get update -y
+#   apt-get install -y --no-install-recommends \
+#     ca-certificates curl gnupg lsb-release
+# }
 
-install_prereqs_rhel() {
-  info "Installing prerequisites via dnf..."
-  dnf install -y \
-    ca-certificates curl gnupg2
-}
+# install_prereqs_rhel() {
+#   info "Installing prerequisites via dnf..."
+#   dnf install -y \
+#     ca-certificates curl gnupg2
+# }
 
-#── Docker & Compose v2 ─────────────────────────────────────────────────────────
-install_docker() {
-  if command -v docker &> /dev/null; then
-    warn "Docker already installed; skipping."
-    return
-  fi
+# #── Docker & Compose v2 ─────────────────────────────────────────────────────────
+# install_docker() {
+#   if command -v docker &> /dev/null; then
+#     warn "Docker already installed; skipping."
+#     return
+#   fi
 
-  info "Installing Docker Engine & Compose v2 plugin..."
-  case $DISTRO in
-    debian)
-      # Add Docker GPG key & repo
-      mkdir -p /etc/apt/keyrings
-      curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg \
-        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+#   info "Installing Docker Engine & Compose v2 plugin..."
+#   case $DISTRO in
+#     debian)
+#       # Add Docker GPG key & repo
+#       mkdir -p /etc/apt/keyrings
+#       curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg \
+#         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-      echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-      https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
-      $(lsb_release -cs) stable" \
-      > /etc/apt/sources.list.d/docker.list
+#       echo \
+#       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+#       https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") \
+#       $(lsb_release -cs) stable" \
+#       > /etc/apt/sources.list.d/docker.list
 
-      apt-get update -y
-      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-      ;;
+#       apt-get update -y
+#       apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+#       ;;
 
-    rhel)
-      dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-      dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-      ;;
-  esac
+#     rhel)
+#       dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+#       dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+#       ;;
+#   esac
 
-  # Enable & start
-  systemctl enable docker
-  systemctl start docker
+#   # Enable & start
+#   systemctl enable docker
+#   systemctl start docker
 
-  # Add users to docker group
-  if [[ -n "${SUDO_USER-}" ]]; then
-    info "Adding $SUDO_USER to docker group."
-    usermod -aG docker "$SUDO_USER" || warn "Couldn't add $SUDO_USER to docker group."
-  fi
+#   # Add users to docker group
+#   if [[ -n "${SUDO_USER-}" ]]; then
+#     info "Adding $SUDO_USER to docker group."
+#     usermod -aG docker "$SUDO_USER" || warn "Couldn't add $SUDO_USER to docker group."
+#   fi
 
-  info "Docker installed: $(docker --version)"
-  info "Docker Compose plugin: $(docker compose version)"
-}
+#   info "Docker installed: $(docker --version)"
+#   info "Docker Compose plugin: $(docker compose version)"
+# }
 
-#── Firewall (UFW) ──────────────────────────────────────────────────────────────
-configure_firewall() {
-  if command -v ufw &> /dev/null; then
-    info "Configuring UFW rules..."
-    ufw allow ssh
-    ufw allow 80,443/tcp    # HTTP/HTTPS
-    ufw allow 5000/tcp      # MLflow
-    ufw allow 8080/tcp      # Airflow
-    ufw allow 9090/tcp      # Prometheus
-    ufw allow 3000/tcp      # Grafana
-    ufw reload || warn "UFW reload failed."
-  else
-    warn "UFW not installed; skipping firewall config."
-  fi
-}
+# #── Firewall (UFW) ──────────────────────────────────────────────────────────────
+# configure_firewall() {
+#   if command -v ufw &> /dev/null; then
+#     info "Configuring UFW rules..."
+#     ufw allow ssh
+#     ufw allow 80,443/tcp    # HTTP/HTTPS
+#     ufw allow 5000/tcp      # MLflow
+#     ufw allow 8080/tcp      # Airflow
+#     ufw allow 9090/tcp      # Prometheus
+#     ufw allow 3000/tcp      # Grafana
+#     ufw reload || warn "UFW reload failed."
+#   else
+#     warn "UFW not installed; skipping firewall config."
+#   fi
+# }
 
 #── Miniconda ───────────────────────────────────────────────────────────────────
 install_miniconda() {
