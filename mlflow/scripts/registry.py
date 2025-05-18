@@ -1,6 +1,7 @@
 import mlflow
 import os
 import sys
+import time
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification)
@@ -10,10 +11,37 @@ import logging
 from datetime import datetime
 import json
 from src.models.transformer_manager import ModelManager
-from config.dataClient import get_blob_storage
+# from config.dataClient import get_blob_storage
 import torch
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Các hằng số cho kết nối MLflow
+MAX_RETRIES = 10
+RETRY_INTERVAL = 5  # seconds
+
+def check_mlflow_connection():
+    """
+    Kiểm tra kết nối tới MLflow server và thử lại nếu không thành công
+    """
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5000")
+    mlflow.set_tracking_uri(tracking_uri)
+    
+    for i in range(MAX_RETRIES):
+        try:
+            # Thử kết nối tới MLflow
+            client = mlflow.tracking.MlflowClient()
+            client.search_experiments()
+            logger.info(f"Successfully connected to MLflow at {tracking_uri}")
+            return True
+        except Exception as e:
+            logger.warning(f"Attempt {i+1}/{MAX_RETRIES}: Failed to connect to MLflow: {e}")
+            if i < MAX_RETRIES - 1:
+                logger.info(f"Retrying in {RETRY_INTERVAL} seconds...")
+                time.sleep(RETRY_INTERVAL)
+    
+    logger.error(f"Could not connect to MLflow after {MAX_RETRIES} attempts")
+    return False
 
 
 class ModelRegistry:
@@ -21,26 +49,42 @@ class ModelRegistry:
         self,
         tracking_uri: Optional[str] = None
     ):
-        # Set tracking URI
+        """
+        Khởi tạo ModelRegistry với MLflow tracking URI
+        
+        Args:
+            tracking_uri: Optional URI tới MLflow tracking server
+        """
+        
+        # Thiết lập tracking URI
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
-        elif not mlflow.get_tracking_uri():
-            mlflow.set_tracking_uri("http://localhost:5000")
-
+        elif os.environ.get("MLFLOW_TRACKING_URI"):
+            mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
+        else:
+            # Sử dụng service name từ docker-compose
+            mlflow.set_tracking_uri("http://mlflow-server:5000")
+            
+        logger.info(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
+        
+        # Kiểm tra kết nối tới MLflow
+        if not check_mlflow_connection():
+            logger.error("Exiting due to MLflow connection failure")
+            sys.exit(1)
+            
         try:
-            self.blob_storage = get_blob_storage()
-            logger.info("Successfully got blob storage instance.")
+            # Lấy và hiển thị artifact URI hiện tại
+            current_artifact_uri = mlflow.get_artifact_uri()
+            logger.info(f"Current MLflow artifact URI: {current_artifact_uri}")
         except Exception as e:
-            logger.error(f"Failed to get blob storage: {e}")
-            raise
+            logger.error(f"Error getting MLflow artifact URI: {e}")
 
-        try:
-            artifact_uri = f"wasbs://artifact@testlakehouse.blob.core.windows.net"
-            mlflow.get_artifact_uri(artifact_uri)
-            logger.info(f"MLflow artifact URI set to: {artifact_uri}")
-        except Exception as e:
-            logger.error(f"Error setting MLflow artifact URI: {e}")
-            raise
+        # try:
+        #     self.blob_storage = get_blob_storage()
+        #     logger.info("Successfully got blob storage instance.")
+        # except Exception as e:
+        #     logger.error(f"Failed to get blob storage: {e}")
+        #     raise
 
         try:
             self.client = mlflow.tracking.MlflowClient()

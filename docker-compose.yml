@@ -32,41 +32,81 @@ x-log-config: &log-config
     max-size: "5m"
     max-file: "1"
 
-services:
   # Airflow Webserver
-  airflow-webserver:
-    <<: *airflow-common
-    hostname: airflow-webserver
-    ports:
-      - "8080:8080"
-    expose:
-      - "8080"
-    logging:
-      <<: *log-config
-    command: >
-      bash -c "\
-        airflow db init && \
-        airflow users create --username admin --password admin_password --firstname FirstName --lastname LastName --email nn20052004@gmail.com --role Admin && \
-        exec airflow webserver"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
+  # airflow-webserver:
+  #   <<: *airflow-common
+  #   hostname: airflow-webserver
+  #   ports:
+  #     - "8080:8080"
+  #   expose:
+  #     - "8080"
+  #   logging:
+  #     <<: *log-config
+  #   command: >
+  #     bash -c "\
+  #       airflow db init && \
+  #       airflow users create --username admin --password admin_password --firstname FirstName --lastname LastName --email nn20052004@gmail.com --role Admin && \
+  #       exec airflow webserver"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
 
   # Airflow Scheduler
-  airflow-scheduler:
-    <<: *airflow-common
-    hostname: airflow-scheduler
+  # airflow-scheduler:
+  #   <<: *airflow-common
+  #   hostname: airflow-scheduler
+  #   logging:
+  #     <<: *log-config
+  #   command: >
+  #     bash -c "exec airflow scheduler"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+
+services:
+  mlflow-server:
+    build:
+      context: ./mlflow
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - AZURE_STORAGE_CONNECTION_STRING=${LAKE_STORAGE_CONN_STR}
+      - MLPGSQL_CONN_STR=${MLPGSQL_CONN_STR}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - ARTIFACT_ROOT=${ARTIFACT_ROOT}
+      - CONDA_DEFAULT_ENV=twit-sentiment-group-2
+      - MLFLOW_TRACKING_STORE_MIGRATE=true
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow:/app
+      - ./src:/app/src
+      - ./.env:/app/.env
+      - ./config:/app/config
+    networks:
+      - your_project_net
     logging:
       <<: *log-config
-    command: >
-      bash -c "exec airflow scheduler"
     healthcheck:
-      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob"]
+      test: ["CMD", "curl", "--fail", "http://localhost:5000/health"]
       interval: 10s
       timeout: 10s
       retries: 5
+    command: >
+      bash -c "
+        source activate twit-sentiment-group-2 &&
+        echo 'Current conda environment:' &&
+        echo $${CONDA_DEFAULT_ENV} &&
+        python -m mlflow db upgrade $${MLPGSQL_CONN_STR} &&
+        exec mlflow server --backend-store-uri=$${MLPGSQL_CONN_STR} --default-artifact-root=$${ARTIFACT_ROOT} --host 0.0.0.0 --port 5000
+      "
+    # depends_on: #Note cái này cho api nè
+    #   - mlflow-server
 
 networks:
   your_project_net:
