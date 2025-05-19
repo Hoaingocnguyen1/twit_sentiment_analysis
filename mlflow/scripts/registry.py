@@ -24,7 +24,7 @@ def check_mlflow_connection():
     """
     Kiểm tra kết nối tới MLflow server và thử lại nếu không thành công
     """
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow-server:5000")
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://52.230.28.21:5000")
     mlflow.set_tracking_uri(tracking_uri)
     
     for i in range(MAX_RETRIES):
@@ -55,18 +55,18 @@ class ModelRegistry:
             # Kiểm tra môi trường thực thi
             try:
                 # Thử kết nối tới service name (khi chạy trong Docker)
-                mlflow.set_tracking_uri("http://mlflow-server:5000")
+                mlflow.set_tracking_uri("http://52.230.28.21:5000")
                 client = mlflow.tracking.MlflowClient()
                 client.search_experiments()
-                logger.info("Sử dụng MLflow qua Docker service name: http://mlflow-server:5000")
+                logger.info("Sử dụng MLflow qua Docker service name: http://52.230.28.21:5000")
             except Exception as e:
                 logger.warning(f"Không thể kết nối qua Docker service name: {e}")
                 # Thử kết nối qua localhost
                 try:
-                    mlflow.set_tracking_uri("http://localhost:5000")
+                    mlflow.set_tracking_uri("http://52.230.28.21:5000")
                     client = mlflow.tracking.MlflowClient()
                     client.search_experiments()
-                    logger.info("Sử dụng MLflow qua localhost: http://localhost:5000")
+                    logger.info("Sử dụng MLflow qua localhost: http://52.230.28.21:5000")
                 except Exception as e2:
                     logger.error(f"Không thể kết nối qua localhost: {e2}")
                     raise RuntimeError("Không thể kết nối tới MLflow server. Vui lòng kiểm tra cấu hình và đảm bảo server đang chạy.")
@@ -85,12 +85,6 @@ class ModelRegistry:
         except Exception as e:
             logger.error(f"Error getting MLflow artifact URI: {e}")
 
-        # try:
-        #     self.blob_storage = get_blob_storage()
-        #     logger.info("Successfully got blob storage instance.")
-        # except Exception as e:
-        #     logger.error(f"Failed to get blob storage: {e}")
-        #     raise
 
         try:
             self.client = mlflow.tracking.MlflowClient()
