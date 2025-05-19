@@ -19,6 +19,8 @@ ENV PATH /opt/conda/envs/twit-sentiment-group-2/bin:$PATH
 EXPOSE 5000
 
 CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+
+
 # FROM continuumio/miniconda3
 # FROM python:3.12-slim
 
@@ -34,7 +36,6 @@ CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
 #       --default-timeout=120 \
 #       --retries=5 \
 #       torch>=2.2.0 \
-#       torchvision \
 #       scikit-learn>=1.4.0
 
 # # Cài phần còn lại trong requirements.txt (đã **loại bỏ** torch, torchvision, scikit-learn)

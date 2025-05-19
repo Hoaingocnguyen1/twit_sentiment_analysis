@@ -225,6 +225,7 @@ def parse_args():
 
 # ==== Main ====
 if __name__ == "__main__":
+    registry = ModelRegistry()
     # First ensure there are no active runs at all
     try:
         while mlflow.active_run():
@@ -266,7 +267,6 @@ if __name__ == "__main__":
         logger.info(f"Loaded {len(eval_texts)} samples for evaluation")
     
     # Initialize registry
-    registry = ModelRegistry()
     
     try:
         # Train model

@@ -45,25 +45,31 @@ def check_mlflow_connection():
 
 
 class ModelRegistry:
-    def __init__(
-        self,
-        tracking_uri: Optional[str] = None
-    ):
-        """
-        Khởi tạo ModelRegistry với MLflow tracking URI
-        
-        Args:
-            tracking_uri: Optional URI tới MLflow tracking server
-        """
-        
+    def __init__( self, tracking_uri: Optional[str] = None):
         # Thiết lập tracking URI
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
         elif os.environ.get("MLFLOW_TRACKING_URI"):
             mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
         else:
-            # Sử dụng service name từ docker-compose
-            mlflow.set_tracking_uri("http://mlflow-server:5000")
+            # Kiểm tra môi trường thực thi
+            try:
+                # Thử kết nối tới service name (khi chạy trong Docker)
+                mlflow.set_tracking_uri("http://mlflow-server:5000")
+                client = mlflow.tracking.MlflowClient()
+                client.search_experiments()
+                logger.info("Sử dụng MLflow qua Docker service name: http://mlflow-server:5000")
+            except Exception as e:
+                logger.warning(f"Không thể kết nối qua Docker service name: {e}")
+                # Thử kết nối qua localhost
+                try:
+                    mlflow.set_tracking_uri("http://localhost:5000")
+                    client = mlflow.tracking.MlflowClient()
+                    client.search_experiments()
+                    logger.info("Sử dụng MLflow qua localhost: http://localhost:5000")
+                except Exception as e2:
+                    logger.error(f"Không thể kết nối qua localhost: {e2}")
+                    raise RuntimeError("Không thể kết nối tới MLflow server. Vui lòng kiểm tra cấu hình và đảm bảo server đang chạy.")
             
         logger.info(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
         
