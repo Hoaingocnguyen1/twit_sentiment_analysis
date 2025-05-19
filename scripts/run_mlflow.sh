@@ -40,8 +40,8 @@ command -v mlflow &>/dev/null || error "mlflow CLI not found in env '${ENV_NAME}
 
 # 6. Run MLflow project, forwarding all parameters
 info "Running MLflow project 'train' with args: $*"
-mlflow run . -e train "$@"
-
+# mlflow run . -e train "$@"
+mlflow run . -e lvalidate "$@"
 #Run full file xong goi 2 cai duoi de train 
-#./scripts/run_mlflow_project.sh -P model_name="bert-base-uncased"
-#./scripts/run_mlflow_project.sh -P model_name="answerdotai/ModernBERT-base"
+./scripts/run_mlflow.sh
+#./scripts/run_mlflow.sh -P model_name="answerdotai/ModernBERT-base"
