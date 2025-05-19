@@ -1,9 +1,5 @@
 name: sentiment-analysis
 
-conda_env: conda.yaml
-# docker_env:
-#   image: Dockerfile
-
 entry_points:
   train:
     parameters:

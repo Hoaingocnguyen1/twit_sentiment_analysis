@@ -16,7 +16,7 @@ azure-web-hook/
 mlflow/artifact/data
 mlflow/artifact/models
 mlruns/
-
+twit_mlops/
 
 # Logs (nếu muốn)
 logs/

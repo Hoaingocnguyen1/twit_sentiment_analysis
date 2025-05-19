@@ -43,5 +43,5 @@ info "Running MLflow project 'train' with args: $*"
 # mlflow run . -e train "$@"
 mlflow run . -e lvalidate "$@"
 #Run full file xong goi 2 cai duoi de train 
-./scripts/run_mlflow.sh
+# ./scripts/run_mlflow.sh
 #./scripts/run_mlflow.sh -P model_name="answerdotai/ModernBERT-base"
