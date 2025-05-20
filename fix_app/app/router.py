@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
 import logging
 
-from app.dependencies import get_champion_model
+from app.dependencies import get_model_store
 from app.models import PredictInput, ErrorResponse, ModelInfo
 #from scripts.registry import ModelRegistry
 from mlflow.pyfunc import PyFuncModel
@@ -22,7 +22,7 @@ router = APIRouter(tags=["sentiment"])
 )
 async def predict_sentiment(
     input_data: PredictInput,
-    model: PyFuncModel = Depends(get_champion_model)
+    model: PyFuncModel = Depends(get_model_store)
 ) -> List[int]:
     """
     Predict sentiment indices for single or multiple texts.
