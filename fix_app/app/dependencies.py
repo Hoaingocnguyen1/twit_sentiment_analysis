@@ -21,8 +21,8 @@ class ModelStore:
     def __init__(self):
         self.model = mlflow.pyfunc.load_model(f"models:/{MLFLOW_MODEL_NAME}@champion")
 
-    def predict(self, text: str):
-        return self.model.predict([text])[0]
+    def predict(self, texts: list[str]):
+        return self.model.predict(texts)
 
     def reload(self):
         self.model = mlflow.pyfunc.load_model(f"models:/{MLFLOW_MODEL_NAME}@champion")
