@@ -27,3 +27,7 @@ class ModelStore:
     def reload(self):
         self.model = mlflow.pyfunc.load_model(f"models:/{MLFLOW_MODEL_NAME}@champion")
 
+model_store = ModelStore()
+
+def get_model_store() -> ModelStore:
+    return model_store
