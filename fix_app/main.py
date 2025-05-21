@@ -57,7 +57,7 @@ async def health_check():
     return {"status": "healthy"}
 
 @api.post("/reload-model")
-def reload_model():
+async def reload_model():
     model_store.reload()
     return {"message": "Champion model reloaded."}
 
