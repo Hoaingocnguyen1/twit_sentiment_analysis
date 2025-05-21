@@ -42,7 +42,7 @@ with DAG(
     default_args=default_args,
     description="""ELT pipeline: crawl tweets, upload to blob, wait, then load to staging DB.""",
     schedule_interval="0 * * * *",
-    start_date=dt.now() - timedelta(minutes=1),
+    start_date=dt(2025, 5, 20, 0, 0)
     catchup=False,
     tags=["twitter", "etl"],
 ) as dag:
