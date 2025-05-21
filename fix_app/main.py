@@ -4,9 +4,14 @@ import argparse
 import logging
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.dependencies import ModelStore
+from app.dependencies import ModelStore, get_model_store
+
+from typing import List, Dict, Any
+from app.models import PredictInput, ErrorResponse, ModelInfo
+
+from mlflow.pyfunc import PyFuncModel
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +65,37 @@ async def health_check():
 async def reload_model():
     model_store.reload()
     return {"message": "Champion model reloaded."}
+
+@api.post(
+    "/api/v1/predict",
+    response_model=List[int],
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid input"},
+        422: {"description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Internal server error"}
+    }
+)
+async def predict_sentiment(
+    input_data: PredictInput,
+    model: PyFuncModel = Depends(get_model_store)
+) -> List[int]:
+    """
+    Predict sentiment indices for single or multiple texts.
+    Returns a list of integers: 0=NEGATIVE, 1=NEUTRAL, 2=POSITIVE.
+    If a single text was provided, the list will contain one element.
+    """
+    try:
+        texts = input_data.texts  # populated via validator
+        if not texts:
+            raise HTTPException(status_code=400, detail="Empty text list provided")
+            
+        logger.debug(f"Received {len(texts)} texts for prediction")
+        predictions = model.predict(texts)
+        return predictions
+    
+    except Exception as e:
+        logger.exception("Error in /predict endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
