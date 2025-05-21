@@ -81,35 +81,31 @@ class Database:
             print(f"Error fetching columns for table '{table_name}': {e}")
             return []
 
-    def read(self, table_name: str, columns: Optional[List[str]] = None, conditions: Optional[Dict[str, any]] = None, limit: Optional[int] = None):
-        """
-        Read data from the specified table.
-
-        :param table_name: Name of the table.
-        :param columns: List of columns to fetch (default: all columns).
-        :param conditions: Dictionary of conditions for the WHERE clause.
-        :param limit: Maximum number of rows to fetch.
-        :return: List of rows.
-        """
+    def read(self, table_name: str, columns: Optional[List[str]] = None, 
+         conditions: Optional[Dict[str, any]] = None,
+         where_clause: Optional[str] = None,
+         limit: Optional[int] = None):
         columns_sql = sql.SQL(", ").join(map(sql.Identifier, columns)) if columns else sql.SQL("*")
         query = sql.SQL("SELECT {} FROM {}").format(columns_sql, sql.Identifier(table_name))
+
         if conditions:
-            where_clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(
+            where_conditions = sql.SQL(" AND ").join(
                 sql.Composed([sql.Identifier(k), sql.SQL(" = "), sql.Placeholder(k)]) for k in conditions.keys()
             )
-            query += where_clause
+            query += sql.SQL(" WHERE ") + where_conditions
+
+        if where_clause:
+            if conditions:
+                query += sql.SQL(" AND ") + sql.SQL(where_clause)
+            else:
+                query += sql.SQL(" WHERE ") + sql.SQL(where_clause)
+
         if limit:
             query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+
         return self._fetch_query(query, f"Error reading data from {table_name}", conditions)
 
     def update(self, table_name: str, updates: Dict[str, any], conditions: Dict[str, any]):
-        """
-        Update records in the specified table.
-
-        :param table_name: Name of the table.
-        :param updates: Dictionary of columns to update and their new values.
-        :param conditions: Dictionary of conditions for the WHERE clause.
-        """
         set_clause = sql.SQL(", ").join(
             sql.Composed([sql.Identifier(k), sql.SQL(" = "), sql.Placeholder(f"set_{k}")]) for k in updates.keys()
         )
@@ -124,12 +120,6 @@ class Database:
         self._execute_query(query, f"Error updating data in {table_name}", params)
 
     def delete(self, table_name: str, conditions: Dict[str, any]):
-        """
-        Delete records from the specified table.
-
-        :param table_name: Name of the table.
-        :param conditions: Dictionary of conditions for the WHERE clause.
-        """
         where_clause = sql.SQL(" AND ").join(
             sql.Composed([sql.Identifier(k), sql.SQL(" = "), sql.Placeholder(k)]) for k in conditions.keys()
         )
@@ -149,14 +139,6 @@ class Database:
             raise
 
     def _fetch_query(self, query, error_message, params=None):
-        """
-        Execute a query and fetch results.
-
-        :param query: SQL query to execute.
-        :param error_message: Error message to display if the query fails.
-        :param params: Parameters for the query.
-        :return: Query results.
-        """
         try:
             self.cursor.execute(query, params)
             return self.cursor.fetchall()

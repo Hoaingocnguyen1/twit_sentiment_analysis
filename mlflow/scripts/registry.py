@@ -1,96 +1,42 @@
 import mlflow
 import os
-import sys
-import time
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification)
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from typing import Optional, List, Dict, Any
 import logging
-from datetime import datetime
-import json
-from src.models.transformer_manager import ModelManager
-# from config.dataClient import get_blob_storage
 import torch
+from typing import Optional, List, Dict, Any
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from src.models.transformer_manager import ModelManager
+
+# Thiết lập logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Các hằng số cho kết nối MLflow
-MAX_RETRIES = 10
-RETRY_INTERVAL = 5  # seconds
-
-def check_mlflow_connection():
-    """
-    Kiểm tra kết nối tới MLflow server và thử lại nếu không thành công
-    """
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://52.230.28.21:5000")
-    mlflow.set_tracking_uri(tracking_uri)
-    
-    for i in range(MAX_RETRIES):
-        try:
-            # Thử kết nối tới MLflow
-            client = mlflow.tracking.MlflowClient()
-            client.search_experiments()
-            logger.info(f"Successfully connected to MLflow at {tracking_uri}")
-            return True
-        except Exception as e:
-            logger.warning(f"Attempt {i+1}/{MAX_RETRIES}: Failed to connect to MLflow: {e}")
-            if i < MAX_RETRIES - 1:
-                logger.info(f"Retrying in {RETRY_INTERVAL} seconds...")
-                time.sleep(RETRY_INTERVAL)
-    
-    logger.error(f"Could not connect to MLflow after {MAX_RETRIES} attempts")
-    return False
-
-
 class ModelRegistry:
-    def __init__( self, tracking_uri: Optional[str] = None):
+    """
+    Class quản lý tương tác với MLflow Model Registry
+    """
+    def __init__(self, tracking_uri: Optional[str] = None):
+        """
+        Khởi tạo kết nối với MLflow tracking server
+        
+        Args:
+            tracking_uri: URL của MLflow tracking server (tùy chọn)
+        """
         # Thiết lập tracking URI
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
         elif os.environ.get("MLFLOW_TRACKING_URI"):
             mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
         else:
-            # Kiểm tra môi trường thực thi
-            try:
-                # Thử kết nối tới service name (khi chạy trong Docker)
-                mlflow.set_tracking_uri("http://52.230.28.21:5000")
-                client = mlflow.tracking.MlflowClient()
-                client.search_experiments()
-                logger.info("Sử dụng MLflow qua Docker service name: http://52.230.28.21:5000")
-            except Exception as e:
-                logger.warning(f"Không thể kết nối qua Docker service name: {e}")
-                # Thử kết nối qua localhost
-                try:
-                    mlflow.set_tracking_uri("http://52.230.28.21:5000")
-                    client = mlflow.tracking.MlflowClient()
-                    client.search_experiments()
-                    logger.info("Sử dụng MLflow qua localhost: http://52.230.28.21:5000")
-                except Exception as e2:
-                    logger.error(f"Không thể kết nối qua localhost: {e2}")
-                    raise RuntimeError("Không thể kết nối tới MLflow server. Vui lòng kiểm tra cấu hình và đảm bảo server đang chạy.")
+            mlflow.set_tracking_uri("http://127.0.0.1:5000")
             
         logger.info(f"MLflow tracking URI: {mlflow.get_tracking_uri()}")
         
-        # Kiểm tra kết nối tới MLflow
-        if not check_mlflow_connection():
-            logger.error("Exiting due to MLflow connection failure")
-            sys.exit(1)
-            
-        try:
-            # Lấy và hiển thị artifact URI hiện tại
-            current_artifact_uri = mlflow.get_artifact_uri()
-            logger.info(f"Current MLflow artifact URI: {current_artifact_uri}")
-        except Exception as e:
-            logger.error(f"Error getting MLflow artifact URI: {e}")
-
-
+        # Khởi tạo client
         try:
             self.client = mlflow.tracking.MlflowClient()
-            logger.info("MLflow client initialized successfully.")
+            logger.info("MLflow client được khởi tạo thành công.")
         except Exception as e:
-            logger.error(f"Failed to initialize MLflow client: {e}")
+            logger.error(f"Không thể khởi tạo MLflow client: {e}")
             raise
 
     def register_model(
@@ -103,32 +49,31 @@ class ModelRegistry:
         tags: Optional[Dict[str, str]] = None
     ) -> str:
         """
-        Register a model in MLflow Model Registry with support for description, metrics, and tags.
+        Đăng ký model vào MLflow Model Registry
         
         Args:
             run_id: MLflow run ID
-            model_name: Name for the registered model
-            description: Optional description for the model
-            metrics: Optional dictionary of metrics to log
-            model_manager: Optional ModelManager instance to save model artifacts
-            tags: Optional dictionary of tags to associate with the model
+            model_name: Tên model để đăng ký
+            description: Mô tả model (tùy chọn)
+            metrics: Dictionary chứa các metrics (tùy chọn)
+            model_manager: Instance của ModelManager để lưu artifacts (tùy chọn)
+            tags: Dictionary chứa các tags (tùy chọn)
             
         Returns:
-            Version number of the registered model
+            Version của model đã đăng ký
         """
         try:
             uri = f"runs:/{run_id}/model"
             details = mlflow.register_model(model_uri=uri, name=model_name)
             version = details.version
 
-            # Update description
+            # Cập nhật mô tả
             if description:
                 self.client.update_registered_model(name=model_name, description=description)
-                logger.info(f"Updated description for model '{model_name}'")
+                logger.info(f"Đã cập nhật mô tả cho model '{model_name}'")
 
-            # Add tags if provided
+            # Thêm tags
             if tags:
-                # Add tags to the registered model
                 for tag_key, tag_value in tags.items():
                     self.client.set_model_version_tag(
                         name=model_name,
@@ -136,52 +81,37 @@ class ModelRegistry:
                         key=tag_key,
                         value=tag_value
                     )
-                logger.info(f"Added {len(tags)} tags to model '{model_name}' version {version}")
+                logger.info(f"Đã thêm {len(tags)} tags vào model '{model_name}' phiên bản {version}")
 
-            # Log metrics if provided
+            # Log metrics
             if metrics:
                 for metric_name, value in metrics.items():
                     if isinstance(value, (int, float)):
                         self.client.log_metric(run_id, metric_name, value)
-                logger.info(f"Logged {len(metrics)} metrics to run {run_id}")
+                logger.info(f"Đã log {len(metrics)} metrics vào run {run_id}")
 
-            # Save model artifacts if model_manager is provided
+            # Lưu model artifacts
             if model_manager:
                 self.save_model_artifacts(model_manager, run_id)
 
-            logger.info(f"Model '{model_name}' registered as version {version}")
+            logger.info(f"Model '{model_name}' đã được đăng ký với phiên bản {version}")
             return version
 
         except Exception as e:
-            logger.error(f"Error registering model: {e}")
-            raise
-
-    def add_aliases(self, model_name: str, version: str, aliases: List[str]) -> None:
-        """
-        Add aliases to a registered model version.
-        
-        Args:
-            model_name: Name of the registered model
-            version: Version of the model
-            aliases: List of aliases to add
-        """
-        try:
-            for alias in aliases:
-                try:
-                    self.client.set_registered_model_alias(model_name, alias, version)
-                    logger.info(f"Added alias '{alias}' to model {model_name} v{version}")
-                except Exception as alias_error:
-                    logger.warning(f"Couldn't add alias '{alias}': {alias_error}")
-            
-            logger.info(f"Added {len(aliases)} aliases to model {model_name} v{version}")
-        except Exception as e:
-            logger.error(f"Error adding aliases: {e}")
+            logger.error(f"Lỗi khi đăng ký model: {e}")
             raise
 
     def save_model_artifacts(self, model_manager: ModelManager, run_id: str, task: str = "text-classification") -> None:
-        """Save model artifacts to MLflow run"""
+        """
+        Lưu model artifacts vào MLflow run
+        
+        Args:
+            model_manager: Instance của ModelManager chứa model và tokenizer
+            run_id: MLflow run ID
+            task: Loại task của model (mặc định: "text-classification")
+        """
         try:
-            # Save model and tokenizer
+            # Lưu model và tokenizer
             mlflow.transformers.log_model(
                 transformers_model={
                     "model": model_manager.model,
@@ -192,16 +122,38 @@ class ModelRegistry:
                 task=task
             )
 
-            # Save model config
+            # Lưu config model nếu có
             if hasattr(model_manager.model, "config"):
                 config_path = os.path.join(model_manager.output_dir, "config_model.json")
                 model_manager.model.config.to_json_file(config_path)
                 mlflow.log_artifact(config_path, run_id=run_id)
 
-            logger.info(f"Model artifacts saved for run {run_id}")
+            logger.info(f"Đã lưu model artifacts cho run {run_id}")
 
         except Exception as e:
-            logger.error(f"Error saving model artifacts: {e}")
+            logger.error(f"Lỗi khi lưu model artifacts: {e}")
+            raise
+
+    def add_aliases(self, model_name: str, version: str, aliases: List[str]) -> None:
+        """
+        Thêm aliases cho phiên bản model đã đăng ký
+        
+        Args:
+            model_name: Tên của model đã đăng ký
+            version: Phiên bản của model
+            aliases: Danh sách aliases cần thêm
+        """
+        try:
+            for alias in aliases:
+                try:
+                    self.client.set_registered_model_alias(model_name, alias, version)
+                    logger.info(f"Đã thêm alias '{alias}' vào model {model_name} v{version}")
+                except Exception as alias_error:
+                    logger.warning(f"Không thể thêm alias '{alias}': {alias_error}")
+            
+            logger.info(f"Đã thêm {len(aliases)} aliases vào model {model_name} v{version}")
+        except Exception as e:
+            logger.error(f"Lỗi khi thêm aliases: {e}")
             raise
 
     def load_model(
@@ -211,61 +163,65 @@ class ModelRegistry:
             version: Optional[str] = None,
             stage: str = "Production"
         ) -> "ModelManager":
-            """Load from local path if provided, otherwise from MLflow registry"""
-            # 1) If local model path specified, load directly
-            if model_path:
-                logger.info(f"Loading model from local path: {model_path}")
-                # Try loading local directory
-                model_obj = AutoModelForSequenceClassification.from_pretrained(
-                    model_path,
-                    local_files_only=True,
-                    device_map='cuda:0' if torch.cuda.is_available() else 'cpu'
-                )
-                tokenizer_obj = AutoTokenizer.from_pretrained(
-                    model_path,
-                    local_files_only=True,
-                    device_map='cuda:0' if torch.cuda.is_available() else 'cpu'
-                )
-                return ModelManager(
-                    model_name=model_name,
-                    model_path=model_path,
-                    finetune=False,
-                    model_obj=model_obj,
-                    tokenizer_obj=tokenizer_obj
-                )
-
-            # 2) Otherwise load from MLflow model registry
-            model_uri = f"models:/{model_name}/{version or stage}"
-            logger.info(f"Loading from MLflow URI: {model_uri}")
-
-            try:
-                loaded = mlflow.transformers.load_model(model_uri)
-            except ValueError as e:
-                if "Repo id must be in the form" in str(e):
-                    logger.warning("Retrying with repo_type='model'")
-                    loaded = mlflow.transformers.load_model(model_uri, repo_type="model")
-                else:
-                    logger.error(f"Loading failed: {e}")
-                    raise
-
-            # Extract model and tokenizer
-            if isinstance(loaded, dict):
-                model_obj = loaded.get("model")
-                tokenizer_obj = loaded.get("tokenizer")
-            elif hasattr(loaded, "model") and hasattr(loaded, "tokenizer"):
-                model_obj = loaded.model
-                tokenizer_obj = loaded.tokenizer
-            else:
-                raise RuntimeError("Loaded object does not contain model and tokenizer")
-
-            # Wrap in ModelManager and return
+        # 1) Nếu có đường dẫn cục bộ, tải trực tiếp
+        if model_path:
+            logger.info(f"Đang tải model từ đường dẫn cục bộ: {model_path}")
+            model_obj = AutoModelForSequenceClassification.from_pretrained(
+                model_path,
+                local_files_only=True,
+                device_map='cuda:0' if torch.cuda.is_available() else 'cpu'
+            )
+            tokenizer_obj = AutoTokenizer.from_pretrained(
+                model_path,
+                local_files_only=True
+            )
             return ModelManager(
-                model_path=model_uri,
+                model_name=model_name,
+                model_path=model_path,
                 finetune=False,
                 model_obj=model_obj,
-                tokenizer_obj=tokenizer_obj)
+                tokenizer_obj=tokenizer_obj
+            )
+
+        # 2) Nếu không, tải từ MLflow model registry
+        model_uri = f"models:/{model_name}/{version or stage}"
+        logger.info(f"Đang tải từ MLflow URI: {model_uri}")
+
+        try:
+            loaded = mlflow.transformers.load_model(model_uri)
+        except ValueError as e:
+            if "Repo id must be in the form" in str(e):
+                logger.warning("Đang thử lại với repo_type='model'")
+                loaded = mlflow.transformers.load_model(model_uri, repo_type="model")
+            else:
+                logger.error(f"Tải model thất bại: {e}")
+                raise
+
+        # Trích xuất model và tokenizer
+        if isinstance(loaded, dict):
+            model_obj = loaded.get("model")
+            tokenizer_obj = loaded.get("tokenizer")
+        elif hasattr(loaded, "model") and hasattr(loaded, "tokenizer"):
+            model_obj = loaded.model
+            tokenizer_obj = loaded.tokenizer
+        else:
+            raise RuntimeError("Đối tượng đã tải không chứa model và tokenizer")
+
+        # Đóng gói trong ModelManager và trả về
+        return ModelManager(
+            model_path=model_uri,
+            finetune=False,
+            model_obj=model_obj,
+            tokenizer_obj=tokenizer_obj
+        )
 
     def list_models(self) -> List[Dict]:
+        """
+        Liệt kê tất cả các models trong registry
+        
+        Returns:
+            Danh sách các models với thông tin chi tiết
+        """
         try:
             regs = self.client.search_registered_models()
             return [
@@ -284,29 +240,93 @@ class ModelRegistry:
                 for m in regs
             ]
         except Exception as e:
-            logger.error(f"Error listing models: {e}")
+            logger.error(f"Lỗi khi liệt kê models: {e}")
             raise
 
     def get_latest_version(self, model_name: str) -> str:
+        """
+        Lấy phiên bản mới nhất của model
+        
+        Args:
+            model_name: Tên của model
+            
+        Returns:
+            Phiên bản mới nhất của model
+        """
         try:
             reg = self.client.get_registered_model(model_name)
             return reg.latest_versions[0].version
         except Exception as e:
-            logger.error(f"Error fetching latest version: {e}")
+            logger.error(f"Lỗi khi lấy phiên bản mới nhất: {e}")
             raise
 
     def transition_model_stage(self, model_name: str, version: str, stage: str) -> None:
+        """
+        Chuyển đổi stage của model
+        
+        Args:
+            model_name: Tên của model
+            version: Phiên bản model
+            stage: Stage mới (ví dụ: "Production", "Staging", "Archived")
+        """
         try:
             self.client.transition_model_version_stage(name=model_name, version=version, stage=stage)
-            logger.info(f"Transitioned {model_name} v{version} to {stage}")
+            logger.info(f"Đã chuyển {model_name} v{version} sang stage {stage}")
         except Exception as e:
-            logger.error(f"Error transitioning model stage: {e}")
+            logger.error(f"Lỗi khi chuyển đổi stage của model: {e}")
             raise
 
     def delete_model_version(self, model_name: str, version: str) -> None:
+        """
+        Xóa phiên bản model
+        
+        Args:
+            model_name: Tên của model
+            version: Phiên bản model cần xóa
+        """
         try:
             self.client.delete_model_version(name=model_name, version=version)
-            logger.info(f"Deleted {model_name} v{version}")
+            logger.info(f"Đã xóa {model_name} v{version}")
         except Exception as e:
-            logger.error(f"Error deleting model version: {e}")
+            logger.error(f"Lỗi khi xóa phiên bản model: {e}")
+            raise
+            
+    def get_model_version_by_alias(self, model_name: str, alias: str) -> Dict[str, Any]:
+        """
+        Lấy thông tin về phiên bản model thông qua alias
+        
+        Args:
+            model_name: Tên của model
+            alias: Alias của phiên bản model (ví dụ: "latest", "stable", "champion", v.v.)
+            
+        Returns:
+            Dictionary chứa thông tin về phiên bản model
+        """
+        try:
+            # Lấy version dựa trên alias
+            version = self.client.get_model_version_by_alias(name=model_name, alias=alias)
+            
+            # Lấy thêm thông tin run_id để truy cập metrics
+            run_id = version.run_id
+            run = self.client.get_run(run_id) if run_id else None
+            
+            # Xây dựng và trả về thông tin chi tiết
+            result = {
+                'name': model_name,
+                'version': version.version,
+                'alias': alias,
+                'status': version.status,
+                'run_id': run_id,
+                'creation_timestamp': version.creation_timestamp
+            }
+            
+            # Thêm metrics nếu có
+            if run and hasattr(run, 'data') and hasattr(run.data, 'metrics'):
+                result['metrics'] = run.data.metrics
+                
+            logger.info(f"Đã truy vấn thông tin cho {model_name} với alias '{alias}' (version: {version.version})")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Lỗi khi lấy thông tin model qua alias: {e}")
             raise

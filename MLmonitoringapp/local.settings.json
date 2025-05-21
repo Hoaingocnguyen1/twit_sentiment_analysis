@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "STORAGE_CONNECTION_STRING": "<your-storage-connection-string>",
+    "DATA_CONTAINER_NAME": "ml-data",
+    "DATA_PROCESSING_QUEUE": "data-processing-queue",
+    "EVALUATION_THRESHOLD": "0.75",
+    "DAYS_TO_SCAN": "5",
+    "MODEL_REGISTRY_NAME": "ml-model-registry",
+    "AZURE_SUBSCRIPTION_ID": "<your-subscription-id>",
+    "AZURE_RESOURCE_GROUP": "<your-resource-group>",
+    "AZURE_ML_WORKSPACE": "<your-ml-workspace-name>"
+  }
+}

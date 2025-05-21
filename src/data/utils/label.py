@@ -38,6 +38,6 @@ def label_data(cleaned_tweets: List[str] = None):
         
     assert len(results) == len(cleaned_tweets)
 
-    df = pd.DataFrame({'tweet': cleaned_tweets, 'sentiment': results})
+    # df = pd.DataFrame({'tweet': cleaned_tweets, 'sentiment': results})
     
-    return df
+    return results

@@ -5,16 +5,6 @@ import io
 from typing import Dict, List, Any, Tuple
 
 def compute_metrics(labels: List[int], preds: List[int]) -> Dict[str, float]:
-    """
-    Tính toán các metrics cho đánh giá mô hình.
-    
-    Args:
-        labels: List các nhãn thực tế
-        preds: List các nhãn dự đoán
-        
-    Returns:
-        Dict[str, float]: Dictionary chứa các metrics
-    """
     # Xác định các labels tồn tại trong dataset
     unique_labels = sorted(list(set(labels)))
     
@@ -52,16 +42,6 @@ def compute_metrics(labels: List[int], preds: List[int]) -> Dict[str, float]:
     return metrics
 
 def plot_confusion_matrix_image(labels: List[int], preds: List[int]) -> Any:
-    """
-    Vẽ confusion matrix và trả về đối tượng figure.
-    
-    Args:
-        labels: List các nhãn thực tế
-        preds: List các nhãn dự đoán
-        
-    Returns:
-        matplotlib.figure.Figure: Đối tượng figure của confusion matrix
-    """
     # Tính toán confusion matrix
     unique_labels = sorted(list(set(labels + preds)))
     cm = confusion_matrix(labels, preds, labels=unique_labels)

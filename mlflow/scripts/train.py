@@ -5,312 +5,231 @@ import getpass
 import datetime
 import argparse
 import mlflow
+from mlflow.tracking import MlflowClient
 import logging
-import traceback
-from registry import ModelRegistry
-from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+import io
 import pandas as pd
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from typing import List, Optional, Tuple
+from dotenv import load_dotenv
+script_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(script_dir))
+sys.path.append(root_dir)
 from src.models.preprocess import preprocess_data
-from src.models.transformer_manager import ModelManager
 from config.dataClient import get_blob_storage
+from src.models.transformer_manager import ModelManager
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s ─ %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-# ==== Function to load data ====
-def load_data(texts_file: str, labels_file: str) -> Tuple[list, list]:
-    """Read CSV files and return lists of texts and labels."""
+load_dotenv()
+
+lake = os.getenv("LAKE_STORAGE_CONN_STR")
+if lake and not os.getenv("AZURE_STORAGE_CONNECTION_STRING"):
+    os.environ["AZURE_STORAGE_CONNECTION_STRING"] = lake
+container_name = os.getenv("AZURE_BLOB_CONTAINER", "testartifact")
+
+tracking_uri = os.getenv("TRACKING_URI", "http://172.23.51.243:5000")
+artifact_uri = f'wasbs://{container_name}@twitlakehouse.blob.core.windows.net/mlflow-artifacts'
+
+mlflow.set_tracking_uri(tracking_uri)
+logger.info(f"Tracking URI: {tracking_uri}")
+logger.info(f"Artifact URI: {artifact_uri}")
+
+client = MlflowClient(tracking_uri=tracking_uri)
+
+def load_and_preprocess_from_blob(
+    tokenizer, max_length: int = 128, label_map: Optional[dict] = None,
+    container_name: str = "testartifact", prefix: str = "data/"
+) -> Tuple[Optional[object], Optional[object]]:
+    """
+    Tải dữ liệu train/test từ blob, chuyển về DataFrame, tiền xử lý thành dataset cho model.
+    """
     try:
-        texts = pd.read_csv(texts_file)['text'].tolist()
-        labels = pd.read_csv(labels_file)['sentiment'].tolist()
-        return texts, labels
-    except Exception as e:
-        logger.error(f"Error loading data: {str(e)}")
-        raise
+        blob = get_blob_storage()
 
-# ==== Function to train model ====
-def train_model(
-    model_name: str,
-    version: str, 
-    output_dir: str,
-    train_texts: list,
-    train_labels: list,
-    eval_texts: Optional[list] = None,
-    eval_labels: Optional[list] = None,
-    epochs: int = 3,
-    batch_size: int = 16,
-    learning_rate: float = 5e-5,
-    finetune: bool = True,
-    registry: Optional[ModelRegistry] = None,
-    exp_id: str = None
-) -> Dict[str, Any]:
-    """Train sentiment analysis model and log to MLflow."""
-    try:
-        # Make sure there are no active runs before starting a new one
-        if mlflow.active_run():
-            logger.info("Ending existing active run before starting a new one")
-            mlflow.end_run()
-            
-        # Start MLflow run
-        with mlflow.start_run(experiment_id=exp_id, run_name=f"{model_name}-training") as run:
-            run_id = run.info.run_id
-            logger.info(f"Started new run with ID: {run_id}")
-            
-            # Log parameters
-            mlflow.log_params({
-                "model_name": model_name,
-                "epochs": epochs,
-                "batch_size": batch_size,
-                "learning_rate": learning_rate,
-                "finetune": finetune,
-                "train_samples": len(train_texts),
-                "eval_samples": len(eval_texts) if eval_texts else 0
-            })
+        train_json_str = blob.read_json_from_container(container_name, prefix + "train_dataset.json")
+        test_json_str = blob.read_json_from_container(container_name, prefix + "test_dataset.json")
 
-            # Initialize model manager
-            manager = ModelManager(
-                model_path=model_name,
-                output_dir=output_dir,
-                finetune=finetune
-            )
-            
-            # Preprocess training data
-            train_dataset = preprocess_data(manager.tokenizer, train_texts, train_labels)
-            
-            # Preprocess evaluation data if available
-            eval_dataset = None
-            if eval_texts and eval_labels:
-                eval_dataset = preprocess_data(manager.tokenizer, eval_texts, eval_labels)
-            
-            # Train model
-            training_results = manager.train(
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                epochs=epochs,
-                batch_size=batch_size,
-                learning_rate=learning_rate
-            )
-            
-            # Log training metrics
-            mlflow.log_metrics({"final_train_loss": training_results["final_train_loss"]})
-            
-            # Log evaluation metrics if available
-            if "eval_metrics" in training_results and training_results["eval_metrics"]:
-                mlflow.log_metrics({
-                    f"eval_{k}": v for k, v in training_results["eval_metrics"].items() 
-                    if k != 'confusion_matrix_fig' and isinstance(v, (int, float))
-                })
-            
-            # Save model
-            try:
-                blob_storage = get_blob_storage()
+        logger.info("Tải dữ liệu JSON từ blob storage thành công.")
 
-                model_save_path = manager.save_model(
-                    blob_storage=blob_storage,
-                    version=version,               
-                    metrics={k: v for k, v in training_results.get("eval_metrics", {}).items() 
-                            if k != "confusion_matrix_fig" and isinstance(v, (int, float))},    
-                    cm_fig=training_results.get("confusion_matrix_fig", None)
-                )
-                logger.info(f"Model saved at {model_save_path}")
-            except Exception as save_error:
-                logger.error(f"Error saving model: {save_error}")
-                logger.debug(traceback.format_exc())
-
-            # Register model if registry is provided
-            if registry:
-                try:
-                    # Get current run ID
-                    current_run_id = run.info.run_id
-                    
-                    # Create model tags
-                    model_tags = {
-                        "model_type": "sentiment_analysis",
-                        "base_model": model_name,
-                        "version": version,
-                        "framework": "transformers",
-                        "batch_size": str(batch_size),
-                        "registered_by": getpass.getuser(),
-                        "registered_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-
-                    # Add evaluation metrics to tags
-                    if "eval_metrics" in training_results:
-                        for k, v in training_results["eval_metrics"].items():
-                            if isinstance(v, (int, float)) and k != "confusion_matrix_fig":
-                                model_tags[f"metric.{k}"] = str(round(v, 4))
-
-                    # Register model with tags
-                    model_version = registry.register_model(
-                        run_id=current_run_id,
-                        model_name=model_name,
-                        description=f"Model trained on {len(train_texts)} samples",
-                        metrics={
-                            "final_train_loss": training_results["final_train_loss"],
-                            **{k: v for k, v in training_results.get("eval_metrics", {}).items() 
-                               if k != "confusion_matrix_fig" and isinstance(v, (int, float))}
-                        },
-                        model_manager=manager,
-                        tags=model_tags
-                    )
-
-                    logger.info(f"Model registered with version: {model_version}")
-                    print(f"Model registered with version: {model_version}")
-
-                    # Transition to Staging
-                    registry.transition_model_stage(model_name, model_version, "Staging")
-                    logger.info(f"Model {model_name} v{model_version} transitioned to STAGING")
-                    
-                    # Define useful aliases
-                    aliases = [
-                        f"v{version}",
-                        version,
-                        datetime.datetime.now().strftime("%Y%m%d")
-                    ]
-                    
-                    # Add aliases to the model
-                    registry.add_aliases(model_name, model_version, aliases)
-                    
-                except Exception as reg_error:
-                    logger.error(f"Error during model registration: {reg_error}")
-                    print(f"Model registration failed: {reg_error}")
-                    logger.error(traceback.format_exc())
-
-            # Return results
-            return {
-                "run_id": run.info.run_id,
-                "train_metrics": {"final_train_loss": training_results["final_train_loss"]},
-                "eval_metrics": {k: v for k, v in training_results.get("eval_metrics", {}).items() 
-                                if k != "confusion_matrix_fig" and isinstance(v, (int, float))}
-            }
-            
-    except Exception as e:
-        logger.error(f"Error training model: {str(e)}")
-        logger.error(traceback.format_exc())
-        # Make sure to end any active run if an exception occurs
-        if mlflow.active_run():
-            mlflow.end_run()
-        raise
-
-# ==== Function to parse arguments ====
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train a sentiment analysis model")
-    parser.add_argument("--model-name", type=str, required=True, 
-                        help="Name of the model to train")
-    parser.add_argument("--version", type=str, default="v1.0.0",
-                        help="Version tag for this model (used in path and blob storage)")
-    parser.add_argument("--train-texts", type=str, required=True, 
-                        help="Path to training texts file")
-    parser.add_argument("--train-labels", type=str, required=True, 
-                        help="Path to training labels file")
-    parser.add_argument("--eval-texts", type=str, 
-                        help="Path to evaluation texts file")
-    parser.add_argument("--eval-labels", type=str, 
-                        help="Path to evaluation labels file")
-    parser.add_argument("--epochs", type=int, default=3, 
-                        help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=16, 
-                        help="Training batch size")
-    parser.add_argument("--learning-rate", type=float, default=5e-05, 
-                        help="Learning rate")
-    parser.add_argument("--finetune", type=bool, default=True, 
-                        help="Whether to finetune the model")
-    parser.add_argument("--experiment-name", type=str, default="sentiment-analysis-training", 
-                        help="MLflow experiment name")
-    
-    return parser.parse_args()
-
-# ==== Main ====
-if __name__ == "__main__":
-    registry = ModelRegistry()
-    # First ensure there are no active runs at all
-    try:
-        while mlflow.active_run():
-            logger.info("Ending existing active run")
-            mlflow.end_run()
-    except Exception as e:
-        logger.warning(f"Error when trying to end active runs: {e}")
-        # Force reset MLflow state by clearing all environment variables
-        for env_var in list(os.environ.keys()):
-            if env_var.startswith('MLFLOW_'):
-                del os.environ[env_var]
-    
-    args = parse_args()
-    output_dir = f"artifact/models/{args.model_name}"
-    
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Clear MLflow environment variables that could cause conflicts
-    for env_var in ['MLFLOW_RUN_ID', 'MLFLOW_EXPERIMENT_ID', 'MLFLOW_EXPERIMENT_NAME']:
-        if env_var in os.environ:
-            del os.environ[env_var]
-    
-    # Set up experiment
-    exp = mlflow.get_experiment_by_name(args.experiment_name)
-    if exp is None:
-        exp_id = mlflow.create_experiment(args.experiment_name)
-    else:
-        exp_id = exp.experiment_id
-    logger.info(f"Using experiment: {args.experiment_name} (ID: {exp_id})")
-    
-    # Load data
-    train_texts, train_labels = load_data(args.train_texts, args.train_labels)
-    logger.info(f"Loaded {len(train_texts)} samples for training")
-    
-    eval_texts, eval_labels = None, None
-    if args.eval_texts and args.eval_labels:
-        eval_texts, eval_labels = load_data(args.eval_texts, args.eval_labels)
-        logger.info(f"Loaded {len(eval_texts)} samples for evaluation")
-    
-    # Initialize registry
-    
-    try:
-        # Train model
-        results = train_model(
-            model_name=args.model_name,
-            version=args.version,
-            output_dir=output_dir,
-            train_texts=train_texts,
-            train_labels=train_labels,
-            eval_texts=eval_texts,
-            eval_labels=eval_labels,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
-            finetune=args.finetune,
-            registry=registry,
-            exp_id=exp_id
-        )
-        
-        # Print results to console
-        logger.info(f"Training completed. Run ID: {results['run_id']}")
-        
-        # Print training metrics
-        print("=== Training metrics ===")
-        train_metrics = results["train_metrics"]
-        if isinstance(train_metrics, dict):
-            for metric, value in train_metrics.items():
-                print(f"{metric}: {value:.4f}")
+        # Kiểm tra dữ liệu trả về có phải list không, nếu không thì đọc JSON từ string
+        if isinstance(train_json_str, list):
+            train_df = pd.DataFrame(train_json_str)
         else:
-            print(f"loss: {train_metrics:.4f}")
-        
-        # Print evaluation metrics if available
-        if results["eval_metrics"]:
-            print("=== Evaluation metrics ===")
-            for metric, value in results["eval_metrics"].items():
-                if isinstance(value, (int, float)):
-                    print(f"{metric}: {value:.4f}")
-    
+            train_df = pd.read_json(io.StringIO(train_json_str), lines=True)
+
+        if isinstance(test_json_str, list):
+            test_df = pd.DataFrame(test_json_str)
+        else:
+            test_df = pd.read_json(io.StringIO(test_json_str), lines=True)
+
+        logger.info(f"Đã parse dataframe - Train shape: {train_df.shape}, Test shape: {test_df.shape}")
+
+        X_train = train_df['text'].tolist()
+        y_train = train_df['sentiment'].tolist()
+        X_test = test_df['text'].tolist()
+        y_test = test_df['sentiment'].tolist()
+
+        logger.info(f"Trích xuất thành công lists - train texts: {len(X_train)}, train labels: {len(y_train)}")
+        if X_train:
+            logger.info(f"Sample text train: '{X_train[0][:50]}...'")
+            logger.info(f"Sample label train: {y_train[0]}")
+
+        # Tiền xử lý dữ liệu
+        train_dataset = preprocess_data(tokenizer=tokenizer, texts=X_train, labels=y_train,
+                                        max_length=max_length, label_map=label_map)
+        test_dataset = preprocess_data(tokenizer=tokenizer, texts=X_test, labels=y_test,
+                                       max_length=max_length, label_map=label_map)
+
+        logger.info(f"Tiền xử lý thành công, train dataset size: {len(train_dataset)}, test dataset size: {len(test_dataset)}")
+        return train_dataset, test_dataset
+
     except Exception as e:
-        logger.error(f"Error in main training process: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
-    
-    finally:
-        # End any active run to ensure clean exit
-        if mlflow.active_run():
-            mlflow.end_run()
+        logger.error(f"Lỗi trong load_and_preprocess_from_blob: {e}")
+        return None, None
+
+def train_model(manager, train_ds, eval_ds, params):
+    mlflow.log_params(params)
+    results = manager.train(
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
+        epochs=params['epochs'],
+        batch_size=params['batch_size'],
+        learning_rate=params['learning_rate']
+    )
+    mlflow.log_metric('final_train_loss', results['final_train_loss'])
+    for k,v in results.get('eval_metrics', {}).items():
+        if isinstance(v, (int,float)):
+            mlflow.log_metric(f"eval_{k}", v)
+    if 'confusion_matrix' in results:
+        mlflow.log_figure(results['confusion_matrix'], artifact_file='confusion_matrix.png')
+    mlflow.pytorch.log_model(manager.model, 'model')
+    return results
+
+def register_model(model_name, run_id, training_results):
+    try:
+        latest_versions = client.get_latest_versions(model_name)
+        max_version = max([int(v.version) for v in latest_versions]) if latest_versions else 0
+        next_version = str(max_version + 1)
+    except Exception:
+        next_version = "1"
+
+    tags = {
+        'model_type': 'sentiment_analysis',
+        'base_model': model_name,
+        'version': next_version,
+        'framework': 'transformers',
+        'registered_by': getpass.getuser(),
+        'registered_at': datetime.datetime.now().isoformat()
+    }
+    metrics = {'final_train_loss': training_results['final_train_loss']}
+    metrics.update({k: v for k, v in training_results.get('eval_metrics', {}).items() if isinstance(v, (int, float))})
+
+    uri = f"runs:/{run_id}/model"
+    try:
+        client.get_registered_model(model_name)
+    except Exception:
+        client.create_registered_model(model_name)
+
+    mv = client.create_model_version(
+        name=model_name,
+        source=uri,
+        run_id=run_id
+    )
+
+    for k, v in tags.items():
+        client.set_model_version_tag(model_name, mv.version, k, v)
+
+    client.transition_model_version_stage(
+        name=model_name,
+        version=mv.version,
+        stage='Staging',
+        archive_existing_versions=False
+    )
+
+    aliases = [f"v{next_version}", next_version, datetime.datetime.now().strftime("%Y%m%d")]
+    for alias in aliases:
+        try:
+            client.set_registered_model_alias(name=model_name, alias=alias, version=mv.version)
+        except Exception as e:
+            logger.warning(f"Could not set alias {alias}: {e}")
+
+    logger.info(f"Registered {model_name} v{mv.version}")
+    return str(mv.version)
+
+if __name__=='__main__':
+    p = argparse.ArgumentParser()
+    p.add_argument('--model-name', required=True)
+    p.add_argument('--epochs', type=int, default=3)
+    p.add_argument('--batch-size', type=int, default=16)
+    p.add_argument('--learning-rate', type=float, default=5e-5)
+    p.add_argument('--finetune', type=bool, default=True)
+    p.add_argument('--experiment-name', type=str, default='default_exp')
+    args = p.parse_args()
+
+    print("\nMLflow Configuration:")
+    print(f"- Tracking URI: {tracking_uri}")
+    print(f"- Artifact URI: {artifact_uri}")
+    print(f"- Azure Storage: {'Configured' if lake else 'Not configured'}")
+    print(f"- Container: {container_name}")
+    print("\n" + "-"*50 + "\n")
+
+    experiment = mlflow.get_experiment_by_name(args.experiment_name)
+    if experiment is None:
+        print(f"Creating new experiment: {args.experiment_name}")
+        experiment_id = mlflow.create_experiment(
+            name=args.experiment_name,
+            artifact_location=artifact_uri
+        )
+        print(f"Created experiment with ID: {experiment_id}")
+    else:
+        print(f"Using existing experiment: {args.experiment_name} (ID: {experiment.experiment_id})")
+        experiment_id = experiment.experiment_id
+
+    mlflow.set_experiment(args.experiment_name)
+
+    mgr = ModelManager(model_path=args.model_name, finetune=args.finetune)
+
+    train_ds, eval_ds = load_and_preprocess_from_blob(tokenizer=mgr.tokenizer)
+
+    if train_ds is None or eval_ds is None:
+        logger.error("Failed to load and preprocess datasets. Exiting.")
+        exit(1)
+
+    # Giả sử train_ds và eval_ds có thể lấy length trực tiếp
+    train_samples = len(train_ds)
+    eval_samples = len(eval_ds) if eval_ds else 0
+
+    if mlflow.active_run():
+        mlflow.end_run()
+
+    run_name = f"{args.model_name}-train-{uuid.uuid4().hex[:8]}"
+    print(f"Starting new run: {run_name}")
+
+    with mlflow.start_run(experiment_id=experiment_id, run_name=run_name) as run:
+        params = {
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'learning_rate': args.learning_rate
+        }
+        mlflow.log_params({
+            'model_name': args.model_name,
+            'train_samples': train_samples,
+            'eval_samples': eval_samples
+        })
+        mlflow.set_tag("created_by", getpass.getuser())
+        mlflow.set_tag("created_at", datetime.datetime.now().isoformat())
+
+        res = train_model(mgr, train_ds, eval_ds, params)
+        run_id = run.info.run_id
+        print(f"Run completed with ID: {run_id}")
+
+        tracking_uri = mlflow.get_tracking_uri()
+        run_url = f"{tracking_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{run_id}"
+        print(f"View this run at: {run_url}")
+
+    version = register_model(args.model_name, run_id, res)
+    print(f"Registered model: {args.model_name}, version: {version}")

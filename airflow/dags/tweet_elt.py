@@ -42,7 +42,7 @@ with DAG(
     default_args=default_args,
     description="""ELT pipeline: crawl tweets, upload to blob, wait, then load to staging DB.""",
     schedule_interval="0 * * * *",
-    start_date=dt.now() - timedelta(minutes=1),
+    start_date=dt(2025, 5, 20, 0, 0)
     catchup=False,
     tags=["twitter", "etl"],
 ) as dag:
@@ -87,12 +87,5 @@ with DAG(
         column_mapping_path=os.path.join(CONFIG_DIR, "columns_map_pull.json"),
     )
 
-    # ==== 9. Run Sentiment Analysis ====
-    sentiment_analysis_task = SentimentPredictionOperator(
-        task_id="sentiment_analysis",
-        staging_table="TWEET_STAGING", 
-        product_table="TWEET_PRODUCT", 
-        batch_size=32,
-    )
-    # ==== 1010. DAG Flow ====
-    crawl_tweets_task >> push_datalake_task >> check_new_files >> pull_staging_task >> sentiment_analysis_task
+    # ==== 9. DAG Flow ====
+    crawl_tweets_task >> push_datalake_task >> check_new_files >> pull_staging_task

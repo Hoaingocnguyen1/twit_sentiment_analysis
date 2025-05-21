@@ -24,7 +24,7 @@ if lake and not os.environ.get("AZURE_STORAGE_CONNECTION_STRING"):
 
 # === 3) Configuration ===
 MLFLOW_PORT = int(os.environ.get("MLFLOW_PORT", 5000))  # Default port from your bash script
-TRACKING_URI = f"http://127.0.0.1:{MLFLOW_PORT}"
+TRACKING_URI ="http://172.23.51.243:5000"
 
 # === 4) Test server connection ===
 def test_server_connection(verbose=True):

@@ -4,18 +4,13 @@ entry_points:
   train:
     parameters:
       model_name: {type: str, default: "answerdotai/ModernBERT-base"}
-      version: {type: str, default: "v1.0.0"}
-      train_texts: {type: str, default: "artifact/data/X_train.csv"}
-      train_labels: {type: str, default: "artifact/data/y_train.csv"}
-      eval_texts: {type: str, default: "artifact/data/X_test.csv"}
-      eval_labels: {type: str, default: "artifact/data/y_test.csv"}
       epochs: {type: int, default: 3}
       batch_size: {type: int, default: 16}
       learning_rate: {type: float, default: 5e-05}
       finetune: {type: bool, default: True}
       experiment_name: {type: str, default: "sentiment-analysis-training"}
     command: >
-      python scripts/train.py --model-name {model_name} --version {version} --train-texts {train_texts} --train-labels {train_labels} --eval-texts {eval_texts} --eval-labels {eval_labels} --epochs {epochs} --batch-size {batch_size} --learning-rate {learning_rate} --finetune {finetune} --experiment-name {experiment_name}
+      python scripts/train.py --model-name {model_name} --epochs {epochs} --batch-size {batch_size} --learning-rate {learning_rate} --finetune {finetune} --experiment-name {experiment_name}
 
   validate:
     parameters:

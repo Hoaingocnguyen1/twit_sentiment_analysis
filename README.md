@@ -1,2 +1,8 @@
-data artifact ném lên blob tải về chạy --sau 17 sẽ làm 
-mlflow run ./mlflow  -e validate --no-conda -P model_name=distilbert-base-uncased  -P version=2 -P promote_to_prod=true -P min_accuracy=0.70     
+- test API
+- pull data lưu vào clean blob
+- Azure function app, Trigger function evaluate,..
+- Public URL
+- CI CD
+- Monitoring
+- DB columns - adj 
+- DVC

@@ -1,7 +1,9 @@
+
+
 import sys 
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR))
 
 from sqlalchemy import create_engine,text
@@ -19,6 +21,7 @@ import mlflow.pyfunc
 from transformers import TextClassificationPipeline
 import torch
 from src.database.baseDatabase import BlobStorage
+import requests
 
 
 from typing import Dict, Any
@@ -31,20 +34,30 @@ tracking_uri = os.getenv('MLFLOW_TRACKING_URI')
 
 blob_storage = BlobStorage(os.getenv('LAKE_STORAGE_CONN_STR'))
 
-MLFLOW_MODEL_NAME = 'twitter_sentiment'
+MLFLOW_MODEL_NAME = os.getenv('MODEL_NAME')
 
 db_conn_string = os.getenv('PGSQL_CONN_STR')
 
+
+FASTAPI_RELOAD_ENDPOINT = "http://localhost:8000/reload-model"
+
+
 class TextDataset(Dataset):
     def __init__(self, texts, labels):
-        self.texts = texts
+        self.encodings = texts
         self.labels = labels
 
     def __len__(self):
-        return len(self.texts)
+        return len(self.encodings)
 
     def __getitem__(self, idx):
-        return self.texts[idx], self.labels[idx]
+        item = {key: torch.tensor(val[idx], dtype=torch.long) for key, val in self.encodings.items()}
+        
+        # Add labels to the dictionary
+        if self.labels is not None:
+            item['labels'] = torch.tensor(self.labels[idx], dtype=torch.long) # Ensure labels are also tensors
+        
+        return item
     
 class TransformerWrapper(mlflow.pyfunc.PythonModel):
     def __init__(self, model, tokenizer):
@@ -53,11 +66,23 @@ class TransformerWrapper(mlflow.pyfunc.PythonModel):
     def predict(self, context, model_input: pd.Series | pd.DataFrame):
         if isinstance(model_input, pd.DataFrame):
             texts = model_input.iloc[:, 0].tolist()
-        else:
+        elif isinstance(model_input, pd.Series):
             texts = model_input.tolist()
-
+        else:
+            try:
+                texts = list(model_input)
+            except:
+                logger.error(f"Can't infer: Expected DataFrame, Series or list object, got {type(model_input)} instead.")
+                return 
         pipe = TextClassificationPipeline(model=self.model, tokenizer=self.tokenizer, return_all_scores=False)
-        return pipe(texts)
+        preds = pipe(texts)
+        try:
+            label_indices = [int(pred["label"].split("_")[-1]) for pred in preds]
+        except Exception as e:
+            logger.error(f"Error parsing prediction output: {e}")
+            raise ValueError("Unexpected prediction format.")
+
+        return label_indices
         
 
 
@@ -114,7 +139,7 @@ def train_model(df, model_dir='mlflow/artifact/models/modernBERT', train_params:
         
         mlflow.log_metric('training_loss', result['final_train_loss'])
         mlflow.log_metrics(result['eval_metrics'])
-        mlflow.log_figure(result['confusion_matrix'], f'{BASE_DIR}/mlflow/figures/cf_{run_id}.png')
+        mlflow.log_figure(result['confusion_matrix'], artifact_file='figures/confusion_matrix.png')
 
         manager.save_model(metrics=result['eval_metrics'], cm_fig=result['confusion_matrix'])
 
@@ -164,6 +189,17 @@ def register_and_promote(train_results: Dict[str, Any], model_name=MLFLOW_MODEL_
         logger.info(f"New model (f1={new_f1:.4f}) not better than current champion (f1={current_f1:.4f})")
 
 
+def reload_model(fastapi_url='http://localhost:8000/reload-model'):
+    try:
+        response = requests.post(fastapi_url)
+        if response.status_code == 200:
+            logger.info("FastAPI service reloaded the model successfully.")
+        else:
+            logger.warning(f"FastAPI reload failed: {response.text}")
+    except Exception as e:
+        logger.error(f"Could not notify FastAPI to reload model: {e}")
+
+
 def main():
     query="""SELECT content, predicted_sentiment FROM "TWEET_STAGING" WHERE created_at >= NOW() - INTERVAL '7 days';"""
     df = get_data_from_database(db_conn_string, query)
@@ -179,6 +215,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #reload_model(FASTAPI_RELOAD_ENDPOINT)
 
 
     
@@ -196,7 +233,6 @@ if __name__ == "__main__":
 
 
     
-
 
 
 
