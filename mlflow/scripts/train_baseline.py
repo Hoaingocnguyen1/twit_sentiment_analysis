@@ -23,6 +23,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s ─ %(message)s"
 )
 logger = logging.getLogger(__name__)
+#Train tay -> registry 
 
 load_dotenv()
 
@@ -91,7 +92,7 @@ def load_and_preprocess_from_blob(
         logger.error(f"Lỗi trong load_and_preprocess_from_blob: {e}")
         return None, None
 
-def train_model(manager, train_ds, eval_ds, params):
+def train_model(manager, run_id, train_ds, eval_ds, params):
     mlflow.log_params(params)
     results = manager.train(
         train_dataset=train_ds,
@@ -106,7 +107,14 @@ def train_model(manager, train_ds, eval_ds, params):
             mlflow.log_metric(f"eval_{k}", v)
     if 'confusion_matrix' in results:
         mlflow.log_figure(results['confusion_matrix'], artifact_file='confusion_matrix.png')
-    mlflow.pytorch.log_model(manager.model, 'model')
+    mlflow.transformers.log_model(
+        transformers_model={
+                    "model": manager.model,
+                    "tokenizer": manager.tokenizer
+                },
+                artifact_path="model",
+                run_id=run_id,
+                task="text-classification")
     return results
 
 def register_model(model_name, run_id, training_results):
@@ -159,6 +167,8 @@ def register_model(model_name, run_id, training_results):
 
     logger.info(f"Registered {model_name} v{mv.version}")
     return str(mv.version)
+
+    
 
 if __name__=='__main__':
     p = argparse.ArgumentParser()
@@ -222,9 +232,9 @@ if __name__=='__main__':
         })
         mlflow.set_tag("created_by", getpass.getuser())
         mlflow.set_tag("created_at", datetime.datetime.now().isoformat())
-
-        res = train_model(mgr, train_ds, eval_ds, params)
+        
         run_id = run.info.run_id
+        res = train_model(mgr, run_id, train_ds, eval_ds, params)
         print(f"Run completed with ID: {run_id}")
 
         tracking_uri = mlflow.get_tracking_uri()

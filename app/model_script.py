@@ -85,7 +85,6 @@ class TransformerWrapper(mlflow.pyfunc.PythonModel):
         return label_indices
         
 
-
 def get_data_from_database(conn_string, query):
     '''
     get data from pgsql

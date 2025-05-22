@@ -1,8 +1,8 @@
 - test API
-- pull data lưu vào clean blob
+- pull data lưu vào clean blob (HNN)
 - Azure function app, Trigger function evaluate,..
 - Public URL
 - CI CD
-- Monitoring
-- DB columns - adj 
-- DVC
+- Monitoring 
+- DB columns - adj (Duy tran )
+- DVC (Duy tran )
