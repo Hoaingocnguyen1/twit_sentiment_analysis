@@ -1,26 +1,166 @@
-# name: CD with Docker Compose
+name: CD - Docker Compose Deployment
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      services:
+        description: 'Services to deploy (comma-separated)'
+        required: false
+        default: 'all'
+        
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches: [main]
 
-# on:
-#   workflow_dispatch:
-
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#     - name: Checkout source
-#       uses: actions/checkout@v3
-
-#     - name: Docker login
-#       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-#     - name: Pull Docker images
-#       run: |
-#         docker pull yourdockerhub/airflow:latest
-#         docker pull yourdockerhub/grafana:latest
-#         docker pull yourdockerhub/prometheus:latest
-#         docker pull yourdockerhub/api:latest
-
-#     - name: Launch stack with Docker Compose
-#       run: |
-#         docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+jobs:
+  deploy-stack:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Docker Hub login
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Create Docker network
+      run: |
+        docker network create app-network 2>/dev/null || echo "Network already exists"
+        
+    - name: Pull required Docker images
+      run: |
+        echo "=== Pulling Docker images ==="
+        
+        # Core application images
+        docker pull hoaingocnguyen/api:latest
+        docker pull hoaingocnguyen/airflow:latest
+        
+        # Monitoring stack
+        docker pull hoaingocnguyen/grafana:latest
+        docker pull hoaingocnguyen/prometheus:latest
+        
+    - name: Prepare environment configuration
+      run: |
+        # Create environment-specific config
+        cp docker-compose.prod.yml docker-compose.deploy.yml
+        
+        # Set environment variables
+        echo "ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}" >> .env
+        echo "DEPLOY_TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)" >> .env
+        echo "GIT_COMMIT=${GITHUB_SHA:0:8}" >> .env
+        
+    - name: Health check existing services
+      run: |
+        echo "=== Checking existing services ==="
+        docker-compose -f docker-compose.yml ps || echo "No existing services found"
+        
+    - name: Deploy services with Docker Compose
+      run: |
+        echo "=== Starting deployment ==="
+        
+        # Deploy based on selected services
+        if [ "${{ github.event.inputs.services }}" == "all" ] || [ -z "${{ github.event.inputs.services }}" ]; then
+          echo "Deploying all services..."
+          docker-compose -f docker-compose.yml up -d --remove-orphans --force-recreate
+        else
+          echo "Deploying selected services: ${{ github.event.inputs.services }}"
+          IFS=',' read -ra SERVICES <<< "${{ github.event.inputs.services }}"
+          for service in "${SERVICES[@]}"; do
+            service=$(echo "$service" | xargs) # trim whitespace
+            echo "Deploying service: $service"
+            docker-compose -f docker-compose.yml up -d --no-deps "$service"
+          done
+        fi
+        
+    - name: Wait for services to be ready
+      run: |
+        echo "=== Waiting for services to start ==="
+        sleep 30
+        
+        # Check service health
+        max_attempts=10
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Health check attempt $attempt/$max_attempts"
+          
+          healthy_services=0
+          total_services=$(docker-compose -f docker-compose.yml ps --services | wc -l)
+          
+          for service in $(docker-compose -f docker-compose.yml ps --services); do
+            if docker-compose -f docker-compose.yml ps "$service" | grep -q "Up"; then
+              ((healthy_services++))
+              echo "✅ $service is healthy"
+            else
+              echo "❌ $service is not ready"
+            fi
+          done
+          
+          if [ $healthy_services -eq $total_services ]; then
+            echo "🎉 All services are healthy!"
+            break
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Some services failed to start properly"
+            docker-compose -f docker-compose.yml logs --tail=50
+            exit 1
+          fi
+          
+          ((attempt++))
+          sleep 10
+        done
+        
+    - name: Run post-deployment tests
+      run: |
+        echo "=== Running post-deployment verification ==="
+        
+        # Test API endpoints
+        if docker-compose -f docker-compose.yml ps api | grep -q "Up"; then
+          echo "Testing API health endpoint..."
+          docker-compose -f docker-compose.yml exec -T api curl -f http://localhost:8000/health || echo "API health check failed"
+        fi
+        
+        # Test Grafana
+        if docker-compose -f docker-compose.yml ps grafana | grep -q "Up"; then
+          echo "Testing Grafana..."
+          docker-compose -f docker-compose.yml exec -T grafana curl -f http://localhost:3000/api/health || echo "Grafana health check failed"
+        fi
+        
+    - name: Display deployment summary
+      if: always()
+      run: |
+        echo "=== Deployment Summary ==="
+        echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
+        echo "Timestamp: $(date)"
+        echo "Git Commit: ${GITHUB_SHA:0:8}"
+        echo ""
+        echo "=== Service Status ==="
+        docker-compose -f docker-compose.yml ps
+        echo ""
+        echo "=== Resource Usage ==="
+        docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+        
+    - name: Cleanup old images
+      if: success()
+      run: |
+        echo "=== Cleaning up old Docker images ==="
+        docker image prune -f
+        docker volume prune -f

@@ -15,7 +15,7 @@ try:
     import mlflow
     from mlflow.tracking import MlflowClient
     # Lấy thông tin kết nối
-    tracking_uri = os.getenv("TRACKING_URI", "http://172.23.51.243:5000")
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://172.23.51.243:5000")
     mlflow.set_tracking_uri(tracking_uri)
     print("Tracking URI:", mlflow.get_tracking_uri())
     artifact_uri ='wasbs://testartifact@twitlakehouse.blob.core.windows.net/mlflow-artifacts'
@@ -35,11 +35,11 @@ try:
     # Khởi tạo MLflow client
 
     client = MlflowClient(tracking_uri=tracking_uri)
-    
+
     # Tìm hoặc tạo experiment
     experiment_name = "windows_test_" + datetime.datetime.now().strftime("%Y%m%d")
     experiment = mlflow.get_experiment_by_name(experiment_name)
-    
+
     if experiment is None:
         print(f"Creating new experiment: {experiment_name}")
         experiment_id = mlflow.create_experiment(
@@ -50,31 +50,31 @@ try:
     else:
         print(f"Using existing experiment: {experiment_name} (ID: {experiment.experiment_id})")
         experiment_id = experiment.experiment_id
-    
+
     # Bắt đầu một run mới
     run_name = f"test_run_{uuid.uuid4().hex[:8]}"
     print(f"Starting new run: {run_name}")
-    
+
     with mlflow.start_run(experiment_id=experiment_id, run_name=run_name) as run:
         # Log parameters
         mlflow.log_param("test_param_1", "value1")
         mlflow.log_param("test_param_2", 42)
-        
+
         # Log metrics
         mlflow.log_metric("accuracy", 0.87)
         mlflow.log_metric("loss", 0.23)
-        
+
         # Log tags
         mlflow.set_tag("test_tag", "Windows test")
         mlflow.set_tag("created_by", os.getenv("USERNAME", "unknown"))
-        
+
         # Log một artifact nhỏ
         with open("test_artifact.txt", "w") as f:
             f.write("This is a test artifact created on Windows.\n")
             f.write(f"Created at: {datetime.datetime.now().isoformat()}\n")
-        
+
         mlflow.log_artifact("test_artifact.txt")
-        
+
         # Lấy thông tin về run
         run_id = run.info.run_id
         print(f"Run completed with ID: {run_id}")

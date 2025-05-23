@@ -24,41 +24,41 @@ if lake and not os.environ.get("AZURE_STORAGE_CONNECTION_STRING"):
 
 # === 3) Configuration ===
 MLFLOW_PORT = int(os.environ.get("MLFLOW_PORT", 5000))  # Default port from your bash script
-TRACKING_URI ="http://172.23.51.243:5000"
+MLFLOW_TRACKING_URI = "http://172.23.51.243:5000"
 
 # === 4) Test server connection ===
 def test_server_connection(verbose=True):
     """Test if the MLflow server is running and accessible"""
-    logger.info(f"Testing connection to MLflow server at {TRACKING_URI}...")
-    
+    logger.info(f"Testing connection to MLflow server at {MLFLOW_TRACKING_URI}...")
+
     try:
         # Test UI endpoint
         logger.info("Testing MLflow UI access...")
-        resp = requests.get(TRACKING_URI, timeout=5)
+        resp = requests.get(MLFLOW_TRACKING_URI, timeout=5)
         if resp.status_code == 200:
             logger.info("MLflow UI is accessible")
         else:
             logger.error(f"MLflow UI returned status code {resp.status_code}")
             logger.error(f"Response content: {resp.text[:200]}...")
             return False
-        
+
         # Test API endpoint with more detailed debugging
         logger.info("Testing MLflow API access...")
         api_url = f"{TRACKING_URI}/api/2.0/mlflow/experiments/list"
         headers = {"Content-Type": "application/json"}
         payload = {}
-        
+
         logger.info(f"Making API request to: {api_url}")
         logger.info(f"Headers: {headers}")
         logger.info(f"Payload: {payload}")
-        
+
         try:
             api_resp = requests.post(api_url, json=payload, headers=headers, timeout=5)
-            
+
             # Log detailed API response information
             logger.info(f"API response status code: {api_resp.status_code}")
             logger.info(f"API response headers: {dict(api_resp.headers)}")
-            
+
             if verbose:
                 try:
                     # Try to parse and pretty-print the JSON response
@@ -67,18 +67,18 @@ def test_server_connection(verbose=True):
                 except Exception as e:
                     # If not JSON, log the raw text (truncated)
                     logger.info(f"API response content (not JSON): {api_resp.text[:500]}")
-            
+
             if api_resp.status_code == 200:
                 logger.info("MLflow API is accessible")
                 return True
             else:
                 logger.error(f"MLflow API returned status code {api_resp.status_code}")
                 return False
-                
+
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed with exception: {str(e)}")
             return False
-            
+
     except Exception as e:
         logger.error(f"Failed to connect to MLflow server: {str(e)}")
         return False
@@ -138,11 +138,13 @@ def test_blob_storage():
 # === 6) Test MLflow Run with Artifact ===
 def test_mlflow_with_artifact():
     """Test MLflow run with artifact storage"""
-    logger.info(f"Testing MLflow run with artifacts using tracking URI: {TRACKING_URI}")
-    
+    logger.info(
+        f"Testing MLflow run with artifacts using tracking URI: {MLFLOW_TRACKING_URI}"
+    )
+
     # Set the tracking URI to connect to your running server
-    mlflow.set_tracking_uri(TRACKING_URI)
-    
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
     try:
         # Create or get experiment
         experiment_name = "connection_test_experiment"
@@ -153,29 +155,31 @@ def test_mlflow_with_artifact():
         else:
             experiment_id = experiment.experiment_id
             logger.info(f"Using existing experiment: {experiment_name} (ID: {experiment_id})")
-        
+
         # Start a run and log artifacts
         with mlflow.start_run(experiment_id=experiment_id, run_name="connection_test") as run:
             run_id = run.info.run_id
             logger.info(f"Started run with ID: {run_id}")
-            
+
             # Log parameters and metrics
             mlflow.log_param("test_param", "test_value")
             mlflow.log_metric("test_metric", 42)
-            
+
             # Create and log a test artifact
             artifact_path = "test_artifact.txt"
             with open(artifact_path, "w") as f:
                 f.write("This is a test artifact for MLflow artifact store verification")
-            
+
             mlflow.log_artifact(artifact_path)
             logger.info(f"Logged artifact: {artifact_path}")
-            
+
             # Clean up local file
             os.remove(artifact_path)
-        
+
         logger.info(f"Successfully completed MLflow run with artifacts")
-        logger.info(f"Run URL: {TRACKING_URI}/#/experiments/{experiment_id}/runs/{run_id}")
+        logger.info(
+            f"Run URL: {MLFLOW_TRACKING_URI}/#/experiments/{experiment_id}/runs/{run_id}"
+        )
         return True
     except Exception as e:
         logger.error(f"MLflow run test failed: {str(e)}")
@@ -185,24 +189,24 @@ def test_mlflow_with_artifact():
 def test_api_endpoints():
     """Test specific MLflow API endpoints to narrow down issues"""
     logger.info("Testing specific MLflow API endpoints...")
-    
+
     endpoints = [
         # Core API endpoints
         {"name": "List Experiments", "method": "POST", "path": "/api/2.0/mlflow/experiments/list", "payload": {}},
         {"name": "Get Experiment", "method": "GET", "path": "/api/2.0/mlflow/experiments/get-by-name", "params": {"experiment_name": "Default"}},
         {"name": "MLflow Ping", "method": "GET", "path": "/api/2.0/mlflow/experiments/list-artifacts", "params": {"run_id": "test", "path": ""}}
     ]
-    
+
     success_count = 0
-    
+
     for endpoint in endpoints:
         name = endpoint["name"]
         method = endpoint["method"]
         path = endpoint["path"]
-        url = f"{TRACKING_URI}{path}"
-        
+        url = f"{MLFLOW_TRACKING_URI}{path}"
+
         logger.info(f"Testing endpoint: {name} ({method} {path})")
-        
+
         try:
             if method == "GET":
                 params = endpoint.get("params", {})
@@ -210,7 +214,7 @@ def test_api_endpoints():
             elif method == "POST":
                 payload = endpoint.get("payload", {})
                 resp = requests.post(url, json=payload, timeout=5)
-            
+
             if resp.status_code == 200:
                 logger.info(f"Endpoint {name} is accessible (Status: {resp.status_code})")
                 success_count += 1
@@ -220,14 +224,14 @@ def test_api_endpoints():
                 logger.warning(f"Response preview: {resp.text[:100]}...")
         except Exception as e:
             logger.error(f"Error testing endpoint {name}: {str(e)}")
-    
+
     logger.info(f"API endpoint test summary: {success_count}/{len(endpoints)} endpoints accessible")
     return success_count > 0
 
 # === 8) Main function ===
 def main():
     logger.info("=== MLflow Server and Artifact Store Test ===")
-    
+
     # 1. Test basic server connection
     if not test_server_connection():
         logger.warning("Basic MLflow server connection test failed. Testing specific API endpoints...")
@@ -235,19 +239,21 @@ def main():
         if not test_api_endpoints():
             logger.error("All API endpoint tests failed. Check if the MLflow server is running correctly.")
             return False
-    
+
     # 2. Test Azure Blob Storage
     if not test_blob_storage():
         logger.error("Failed to test Azure Blob Storage. Exiting.")
         return False
-    
+
     # 3. Test MLflow with artifacts
     if not test_mlflow_with_artifact():
         logger.error("Failed to test MLflow with artifacts. Exiting.")
         return False
-    
+
     logger.info("=== All tests passed successfully! ===")
-    logger.info(f"Your MLflow server at {TRACKING_URI} is properly configured with Azure Blob artifact store.")
+    logger.info(
+        f"Your MLflow server at {MLFLOW_TRACKING_URI} is properly configured with Azure Blob artifact store."
+    )
     return True
 
 if __name__ == "__main__":

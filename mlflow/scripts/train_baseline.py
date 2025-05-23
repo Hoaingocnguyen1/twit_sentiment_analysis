@@ -24,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s ─ %(message)s"
 )
 logger = logging.getLogger(__name__)
-#Train tay -> registry 
+# Train tay -> registry
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ if lake and not os.getenv("AZURE_STORAGE_CONNECTION_STRING"):
     os.environ["AZURE_STORAGE_CONNECTION_STRING"] = lake
 container_name = os.getenv("AZURE_BLOB_CONTAINER", "testartifact")
 
-tracking_uri = os.getenv("TRACKING_URI", "http://172.23.51.243:5000")
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://172.23.51.243:5000")
 artifact_uri = f'wasbs://{container_name}@twitlakehouse.blob.core.windows.net/mlflow-artifacts'
 
 mlflow.set_tracking_uri(tracking_uri)
@@ -173,7 +173,6 @@ def register_model(model_name, run_id, training_results):
     logger.info(f"Registered {encoded_name} v{mv.version}")
     return str(mv.version)
 
-    
 
 if __name__=='__main__':
     p = argparse.ArgumentParser()

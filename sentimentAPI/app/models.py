@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional
+from pydantic import BaseModel, Field, root_validator
+from typing import List, Optional, Union
 from typing_extensions import Annotated
 
 
@@ -15,19 +15,17 @@ class PredictInput(BaseModel):
         Annotated[List[str], Field(None, description="List of texts to analyze")]
     ] = None
 
-    @model_validator(mode='before')
-    @classmethod
+    @root_validator(pre=True)
     def ensure_texts(cls, values):
-        if isinstance(values, dict):
-            text = values.get("text")
-            texts = values.get("texts")
+        text = values.get("text")
+        texts = values.get("texts")
 
-            if text and texts:
-                raise ValueError("Provide only one of 'text' or 'texts'.")
-            if not text and not texts:
-                raise ValueError("One of 'text' or 'texts' must be provided.")
-            if text:
-                values["texts"] = [text]
+        if text and texts:
+            raise ValueError("Provide only one of 'text' or 'texts'.")
+        if not text and not texts:
+            raise ValueError("One of 'text' or 'texts' must be provided.")
+        if text:
+            values["texts"] = [text]
         return values
 
 

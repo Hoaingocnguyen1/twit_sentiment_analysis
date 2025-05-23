@@ -1,25 +1,25 @@
-# name: CD to VM (MLFlow setup)
+name: CD to VM (MLFlow setup)
 
-# on:
-#   workflow_dispatch:
+on:
+  workflow_dispatch:
 
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-#     steps:
-#     - name: Checkout repo
-#       uses: actions/checkout@v3
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-#     - name: Start SSH Agent and add key
-#       uses: webfactory/ssh-agent@v0.7.0
-#       with:
-#         ssh-private-key: ${{ secrets.VM_SSH_KEY }}
+    - name: Start SSH Agent and add key
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.AZURE_VM_KEY }}
 
-#     - name: Copy setup script to VM
-#       run: |
-#         scp -o StrictHostKeyChecking=no setup_mlflow.sh ubuntu@${{ secrets.VM_HOST }}:/home/ubuntu/
+    - name: Copy setup script to VM
+      run: |
+        scp -o StrictHostKeyChecking=no setup_mlflow.sh adminazure@${{ secrets.VM_HOST }}:/home/ubuntu/
 
-#     - name: Run setup script on VM
-#       run: |
-#         ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.VM_HOST }} 'bash /home/ubuntu/setup_mlflow.sh'
+    - name: Run setup script on VM
+      run: |
+        ssh -o StrictHostKeyChecking=no adminazure@${{ secrets.VM_HOST }} 'bash /home/ubuntu/setup_mlflow.sh'

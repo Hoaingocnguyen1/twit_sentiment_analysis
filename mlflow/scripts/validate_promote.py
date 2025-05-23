@@ -40,7 +40,7 @@ if lake and not os.getenv("AZURE_STORAGE_CONNECTION_STRING"):
 container_name = os.getenv("AZURE_BLOB_CONTAINER", "testartifact")
 
 # Set up MLflow tracking server
-tracking_uri = os.getenv("TRACKING_URI", "http://172.23.51.243:5000")
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://172.23.51.243:5000")
 artifact_uri = f'wasbs://{container_name}@twitlakehouse.blob.core.windows.net/mlflow-artifacts'
 
 mlflow.set_tracking_uri(tracking_uri)

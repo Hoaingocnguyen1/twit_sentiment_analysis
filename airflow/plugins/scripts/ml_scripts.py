@@ -18,30 +18,30 @@ logger = logging.getLogger(__name__)
 def setup_environment(**context):
     """Setup environment for ML pipeline"""
     logger.info("Setting up environment for ML pipeline")
-    
+
     # Add project root to Python path
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(os.path.dirname(script_dir))
     sys.path.append(root_dir)
-    
+
     # Validate environment variables
     required_env_vars = [
-        'LAKE_STORAGE_CONN_STR',
-        'AZURE_BLOB_CONTAINER',
-        'TRACKING_URI'
+        "LAKE_STORAGE_CONN_STR",
+        "AZURE_BLOB_CONTAINER",
+        "MLFLOW_TRACKING_URI"
     ]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {missing_vars}")
-    
+
     # Generate unique run identifier
     run_uuid = uuid.uuid4().hex[:8]
     context['task_instance'].xcom_push(key='run_uuid', value=run_uuid)
-    
+
     # Set MLflow tracking URI
-    tracking_uri = os.getenv("TRACKING_URI", "http://52.163.185.16:5000/")
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://52.163.185.16:5000/")
     mlflow.set_tracking_uri(tracking_uri)
-    
+
     logger.info(f"Environment setup complete. Run UUID: {run_uuid}")
     return {"status": "success", "run_uuid": run_uuid}
 
