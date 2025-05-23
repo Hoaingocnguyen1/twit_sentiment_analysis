@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+prometheus_client
+sqlalchemy
+psycopg2
+azure-storage-blob
+pydantic
+azure-identity
+scikit-learn
