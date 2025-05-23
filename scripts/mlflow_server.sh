@@ -36,7 +36,11 @@ done
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-5000}"
 LOG_FILE="${LOG_FILE:-mlflow_server.log}"
-PID_FILE="/var/run/mlflow_server.pid"
+# Lấy thư mục chứa file log
+LOG_DIR=$(dirname "$LOG_FILE")
+
+# Lấy tên file log, đổi đuôi .log thành .pid
+PID_FILE="$LOG_DIR/$(basename "$LOG_FILE" .log).pid"
 
 # --- Function to check if MLflow is already running ---
 check_mlflow_running() {
