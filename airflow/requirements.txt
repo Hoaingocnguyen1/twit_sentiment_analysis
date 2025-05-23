@@ -1,11 +1,38 @@
-apache-airflow==2.10.5
+# apache-airflow==2.10.5
+# psycopg2-binary==2.9.10
+# pandas==2.1.4
+# numpy==1.26.4
+# twikit==2.3.3
+# python-dotenv==1.1.0
+# pydantic==2.11.2
+# azure-storage-blob
+# requests==2.32.3
+# aiohttp==3.11.11
+# typing-extensions
+accelerate>=0.25.0
+azure-identity>=1.15.0
+azure-storage-blob>=12.19.0
+fastapi>=0.109.0
+matplotlib>=3.8.0
+pandas>=2.2.0
+python-multipart>=0.0.7
+scikit-learn>=1.4.0
+sentencepiece
+tiktoken
+torch>=2.2.0
+tqdm>=4.66.0
+transformers>=4.37.0
+uvicorn>=0.27.0
+mlflow>=2.10.0
+twikit==2.3.3
 psycopg2-binary==2.9.10
-pandas==2.1.4
+openai==1.55.3
+torchvision
+apache-airflow==2.10.5
 numpy==1.26.4
 twikit==2.3.3
+typing-extensions
 python-dotenv==1.1.0
 pydantic==2.11.2
-azure-storage-blob
 requests==2.32.3
 aiohttp==3.11.11
-typing-extensions
