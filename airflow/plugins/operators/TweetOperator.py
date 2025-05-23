@@ -21,7 +21,7 @@ class ExtractDataOperator(BaseOperator):
         logger = logging.getLogger(__name__)
         
         try:
-            extractor = DataExtractor()
+            extractor = DataExtractor(limit=30)
             data_dict = extractor.extract_tweets()
             
             if data_dict is None:

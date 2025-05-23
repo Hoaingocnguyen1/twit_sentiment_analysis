@@ -14,9 +14,8 @@ class DataSplitter:
             X_train, X_test, y_train, y_test = train_test_split(
                 texts, labels, 
                 test_size=0.2, 
-                random_state=42
-                stratify=labels  # Đảm bảo phân bố nhãn đồng đều
-            )
+                random_state=42,
+                stratify=labels)
             self.logger.info(f"Chia train/test thành công: train={len(X_train)}, test={len(X_test)}")
             self._log_split_distribution(y_train, y_test)
             

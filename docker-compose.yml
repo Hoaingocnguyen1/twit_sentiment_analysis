@@ -32,41 +32,41 @@ x-log-config: &log-config
     max-size: "5m"
     max-file: "1"
 
-
+services:
   # Airflow Webserver
-  # airflow-webserver:
-  #   <<: *airflow-common
-  #   hostname: airflow-webserver
-  #   ports:
-  #     - "8080:8080"
-  #   expose:
-  #     - "8080"
-  #   logging:
-  #     <<: *log-config
-  #   command: >
-  #     bash -c "\
-  #       airflow db init && \
-  #       airflow users create --username admin --password admin_password --firstname FirstName --lastname LastName --email nn20052004@gmail.com --role Admin && \
-  #       exec airflow webserver"
-  #   healthcheck:
-  #     test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-  #     interval: 10s
-  #     timeout: 10s
-  #     retries: 5
+  airflow-webserver:
+    <<: *airflow-common
+    hostname: airflow-webserver
+    ports:
+      - "8080:8080"
+    expose:
+      - "8080"
+    logging:
+      <<: *log-config
+    command: >
+      bash -c "\
+        airflow db init && \
+        airflow users create --username admin --password admin_password --firstname FirstName --lastname LastName --email nn20052004@gmail.com --role Admin && \
+        exec airflow webserver"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   # Airflow Scheduler
-  # airflow-scheduler:
-  #   <<: *airflow-common
-  #   hostname: airflow-scheduler
-  #   logging:
-  #     <<: *log-config
-  #   command: >
-  #     bash -c "exec airflow scheduler"
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob"]
-  #     interval: 10s
-  #     timeout: 10s
-  #     retries: 5
+  airflow-scheduler:
+    <<: *airflow-common
+    hostname: airflow-scheduler
+    logging:
+      <<: *log-config
+    command: >
+      bash -c "exec airflow scheduler"
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 networks:
   your_project_net:
     driver: bridge

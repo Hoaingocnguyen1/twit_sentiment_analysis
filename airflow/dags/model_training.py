@@ -1,15 +1,24 @@
 from datetime import datetime, timedelta
 from airflow import DAG
+
+
 from airflow.operators.python import BranchPythonOperator
 from airflow.operators.dummy import DummyOperator
 
+import sys
+
+print(f"Python path: {sys.path}")
+import os
+
+print(f"Working directory: {os.getcwd()}")
+print(f"Files in directory: {os.listdir('.')}")
+print(f"Files in plugins: {os.listdir('/opt/airflow/plugins')}")
 # Import custom operators
 from plugins.operators.ml_operator import (
     MLSetupOperator,
     MLDataLoaderOperator, 
     ChampionLoaderOperator,
     ChampionValidationOperator,
-    CheckTrainingOperator,
     MLTrainingOperator,
     MLModelRegistrationOperator,
     MLValidationOperation,
@@ -20,14 +29,14 @@ from plugins.operators.ml_operator import (
 default_args = {
     'owner': 'ml-team',
     'depends_on_past': False,
-    'start_date': datetime(2025, 23, 5),
+    'start_date': datetime(2025, 5, 23),
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'retry_delay': timedelta(minutes=1),
     'catchup': False
 }
-
+1
 # DAG configuration
 dag = DAG(
     'ml_training_pipeline',
@@ -63,8 +72,7 @@ data_loader_task = MLDataLoaderOperator(
 # 3. Load current champion model
 champion_loader_task = ChampionLoaderOperator(
     task_id='load_champion_model',
-    model_name='my_ml_model',
-    base_model_path='/models/champion/',
+    model_name="distilbert-base-uncased",
     dag=dag
 )
 

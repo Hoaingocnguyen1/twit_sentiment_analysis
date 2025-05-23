@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # # =============================================================================
 # # install_dependencies.sh
 # #
@@ -86,7 +87,7 @@
 
 # echo "Dependencies installed successfully in venv at $VENV_PATH"
 
-#!/usr/bin/env bash
+
 # =============================================================================
 # install_dependencies.sh
 #
