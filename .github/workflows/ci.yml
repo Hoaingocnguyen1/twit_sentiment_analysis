@@ -56,7 +56,7 @@ jobs:
     - name: Build Docker images
       run: |
         docker build -t hoaingocnguyen/twit_sentiment_analysis-airflow:latest -f airflow/Dockerfile .
-        docker build -t hoaingocnguyen/twit_sentiment_analysis-fastapi:latest -f sentimenAPI/Dockerfile.api .
+        docker build -t hoaingocnguyen/twit_sentiment_analysis-fastapi:latest -f sentimentAPI/Dockerfile.api .
     
     - name: Push Docker images
       run: |

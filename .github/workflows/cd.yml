@@ -49,17 +49,13 @@ jobs:
         echo "=== Pulling Docker images ==="
         
         # Core application images
-        docker pull hoaingocnguyen/api:latest
-        docker pull hoaingocnguyen/airflow:latest
-        
-        # Monitoring stack
-        docker pull hoaingocnguyen/grafana:latest
-        docker pull hoaingocnguyen/prometheus:latest
+        docker pull hoaingocnguyen/twit_sentiment_analysis-airflow:latest
+        docker pull hoaingocnguyen/twit_sentiment_analysis-fastapi:latest
         
     - name: Prepare environment configuration
       run: |
         # Create environment-specific config
-        cp docker-compose.prod.yml docker-compose.deploy.yml
+        cp docker-compose.yml
         
         # Set environment variables
         echo "ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}" >> .env
