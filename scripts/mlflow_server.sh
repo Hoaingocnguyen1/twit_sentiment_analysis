@@ -186,15 +186,15 @@ if check_mlflow_running; then
   fi
 fi
 
-# --- Activate virtual environment if available ---
-VENV_DIR="$(dirname "$SCRIPT_DIR")/venv"
-if [ -d "$VENV_DIR" ]; then
-  echo "Activating virtual environment at $VENV_DIR"
-  # shellcheck disable=SC1091
-  source "$VENV_DIR/bin/activate"
+# --- Activate conda environment ---
+if command -v conda &> /dev/null; then
+  echo "Activating conda environment: mlflow-env"
+  source "$(conda info --base)/etc/profile.d/conda.sh"
+  conda activate mlflow-env
 else
-  echo "Virtual environment not found at $VENV_DIR, proceeding without activation"
-fi 
+  echo "Error: Conda not found. Please install Anaconda or Miniconda and create the 'mlflow-env' environment."
+  exit 1
+fi
 
 # --- Check MLflow installation ---
 if ! command -v mlflow &> /dev/null; then
