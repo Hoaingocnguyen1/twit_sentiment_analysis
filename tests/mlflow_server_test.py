@@ -44,7 +44,7 @@ def test_server_connection(verbose=True):
 
         # Test API endpoint with more detailed debugging
         logger.info("Testing MLflow API access...")
-        api_url = f"{TRACKING_URI}/api/2.0/mlflow/experiments/list"
+        api_url = f"{MLFLOW_TRACKING_URI}/api/2.0/mlflow/experiments/list"
         headers = {"Content-Type": "application/json"}
         payload = {}
 
