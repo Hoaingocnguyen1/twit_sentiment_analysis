@@ -15,7 +15,6 @@ from plugins.operators.CrawlTweetsOperator import CrawlTweetsOperator
 from plugins.operators.PushDatalakeOperator import PushDatalakeOperator
 from plugins.operators.pullStagingOperator import PullStagingOperator
 from plugins.sensors.lakeSensor import AzureBlobNewFileSensor
-from plugins.operators.SentimentPredictionOperator import SentimentPredictionOperator
 from config.constants import BASE_DIR, TWITTER_HASHTAGS
 from dotenv import load_dotenv
 

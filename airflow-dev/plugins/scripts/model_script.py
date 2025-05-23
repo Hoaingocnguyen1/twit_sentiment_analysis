@@ -83,18 +83,8 @@ class TransformerWrapper(mlflow.pyfunc.PythonModel):
             raise ValueError("Unexpected prediction format.")
 
         return label_indices
-        
 
-def get_data_from_database(conn_string, query):
-    '''
-    get data from pgsql
-    '''
-    engine = create_engine(conn_string)
-    with engine.connect() as connection:
 
-        df = pd.read_sql_query(sql=query, con=connection)
-
-    return df
 
 def train_model(df, model_dir='mlflow/artifact/models/modernBERT', train_params: dict | None = None):
 

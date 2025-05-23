@@ -3,11 +3,7 @@ azure-identity>=1.15.0
 azure-storage-blob>=12.19.0
 fastapi>=0.109.0
 matplotlib>=3.8.0
-numpy>=1.26.0
 pandas>=2.2.0
-pydantic>=2.6.0
-psycopg2-binary>=2.9.9
-python-dotenv>=1.0.0
 python-multipart>=0.0.7
 scikit-learn>=1.4.0
 sentencepiece
@@ -21,3 +17,11 @@ twikit==2.3.3
 psycopg2-binary==2.9.10
 openai==1.55.3
 torchvision
+apache-airflow==2.10.5
+numpy==1.26.4
+twikit==2.3.3
+typing-extensions
+python-dotenv==1.1.0
+pydantic==2.11.2
+requests==2.32.3
+aiohttp==3.11.11

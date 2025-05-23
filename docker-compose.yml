@@ -67,44 +67,6 @@ x-log-config: &log-config
   #     interval: 10s
   #     timeout: 10s
   #     retries: 5
-services:
-  mlflow-server:
-    build:
-      context: ./mlflow
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      - AZURE_STORAGE_CONNECTION_STRING=${LAKE_STORAGE_CONN_STR}
-      - MLSQL_CONN_STR=${MLSQL_CONN_STR}
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-      - ARTIFACT_ROOT=${ARTIFACT_ROOT}
-      - CONDA_DEFAULT_ENV=twit-sentiment-group-2
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./mlflow:/app
-      - ./src:/app/src
-      - ./.env:/app/.env
-      - ./config:/app/config
-    networks:
-      - your_project_net
-    logging:
-      <<: *log-config
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:5000/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    command: >
-      bash -c "
-        source activate twit-sentiment-group-2 &&
-        echo 'Current conda environment:' &&
-        echo $${CONDA_DEFAULT_ENV} &&
-        python -m mlflow db upgrade $${MLSQL_CONN_STR} &&
-        exec mlflow server --backend-store-uri=$${MLSQL_CONN_STR} --default-artifact-root=$${ARTIFACT_ROOT} --host 0.0.0.0 --port 5000
-      "
-
 networks:
   your_project_net:
     driver: bridge
