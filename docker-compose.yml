@@ -7,6 +7,7 @@ x-airflow-common-env: &airflow-common-env
   AIRFLOW__CORE__PLUGINS_FOLDER: /opt/airflow/plugins
   AIRFLOW__CORE__BASE_LOG_FOLDER: /opt/airflow/logs
   AIRFLOW__WEBSERVER__SECRET_KEY: "my_ultra_secret_key_123456"
+  AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8080
   PYTHONPATH: /opt/airflow
 
 # --- common service definition for Airflow ---
@@ -42,6 +43,8 @@ services:
       - "8080:8080"
     expose:
       - "8080"
+    environment:
+      - AIRFLOW__WEBSERVER__BASE_URL=http://localhost:8080
     logging:
       <<: *log-config
     command: >
@@ -68,51 +71,51 @@ services:
       timeout: 10s
       retries: 5
 
-  fastapi:
-    build:
-      context: .
-      dockerfile: mlflow/Dockerfile.api
-    container_name: fastapi_service
-    ports:
-      - "8000:8000"
-    environment:
-      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
-      - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
-      - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
-      - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
-      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
-      - MODEL_NAME=${MODEL_NAME}
-    volumes:
-      - ./mlflow:/api
-      - ./src:/api/src
-    networks:
-      - monitoring
-      - your_project_net
+  # fastapi:
+  #   build:
+  #     context: .
+  #     dockerfile: mlflow/Dockerfile.api
+  #   container_name: fastapi_service
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+  #     - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
+  #     - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
+  #     - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
+  #     - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
+  #     - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+  #     - MODEL_NAME=${MODEL_NAME}
+  #   volumes:
+  #     - ./mlflow:/api
+  #     - ./src:/api/src
+  #   networks:
+  #     - monitoring
+  #     - your_project_net
 
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus_b
-    volumes:
-      - ./mlflow/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    networks:
-      - monitoring
+  # prometheus:
+  #   image: prom/prometheus
+  #   container_name: prometheus_b
+  #   volumes:
+  #     - ./mlflow/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus_data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - monitoring
 
-  grafana:
-    image: grafana/grafana
-    container_name: grafana_a
-    ports:
-      - "3000:3000"
-    networks:
-      - monitoring
+  # grafana:
+  #   image: grafana/grafana
+  #   container_name: grafana_a
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - monitoring
 
 networks:
-  monitoring:
+  # monitoring:
   your_project_net:
     driver: bridge
 
-volumes:
-  prometheus_data:
+# volumes:
+#   prometheus_data:

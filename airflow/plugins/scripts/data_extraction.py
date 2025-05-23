@@ -22,7 +22,7 @@ class DataExtractor:
         self.db = get_db()
         self.limit = limit
     
-    def extract_tweets(self, limit):
+    def extract_tweets(self):
         try:
             columns = ["tweet_id", "content"]
             seven_days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
