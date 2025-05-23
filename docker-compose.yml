@@ -1,0 +1,46 @@
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: mlflow/Dockerfile.api
+    container_name: fastapi_service
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
+      - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
+      - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
+      - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - MODEL_NAME=${MODEL_NAME}
+    volumes:
+      - ./mlflow:/api
+      - ./src:/api/src
+    networks:
+      - monitoring
+      
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus_b
+    volumes:
+      - ./mlflow/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana_a
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+
+volumes:
+  prometheus_data:
