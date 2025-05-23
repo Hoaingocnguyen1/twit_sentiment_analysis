@@ -55,6 +55,6 @@ jobs:
     - name: Pull and verify Docker images
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        docker pull hoaingocnguyen/twit_sentiment_analysis-airflow-scheduler:latest
-        docker pull hoaingocnguyen/twit_sentiment_analysis-airflow-webserver:latest
-        docker pull hoaingocnguyen/twit_sentiment_analysis-fastapi:latest
+        docker push hoaingocnguyen/twit_sentiment_analysis-airflow-scheduler:latest
+        docker push hoaingocnguyen/twit_sentiment_analysis-airflow-webserver:latest
+        docker push hoaingocnguyen/twit_sentiment_analysis-fastapi:latest
