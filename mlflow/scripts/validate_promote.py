@@ -12,6 +12,7 @@ from mlflow.tracking import MlflowClient
 from datetime import datetime
 from dotenv import load_dotenv
 import getpass
+# import urllib.parse
 
 # Add path to sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,6 +51,32 @@ logger.info(f"Artifact URI: {artifact_uri}")
 client = MlflowClient(tracking_uri=tracking_uri)
 
 
+# def encode_model_name(name: str) -> str:
+#     return urllib.parse.quote(name, safe='')
+
+def get_current_champion() -> Optional[Tuple[str, str]]:
+    """
+    Get current champion model name and version by searching across all registered models.
+    Returns (model_name, version) tuple or None if no champion found.
+    """
+    try:
+        registered_models = client.search_registered_models()
+        
+        for model in registered_models:
+            try:
+                model_details = client.get_registered_model(model.name)
+                if model_details.aliases:
+                    for alias in model_details.aliases:
+                        if alias.alias == "champion":
+                            return (model.name, alias.version)
+            except Exception:
+                continue  # Skip this model and continue searching
+                
+        return None
+    except Exception as e:
+        logger.error(f"Error searching for champion: {e}")
+        return None
+
 # ==== Registry helper functions ====
 def get_model_version(model_name: str, version: Optional[str] = None, stage: Optional[str] = None):
     """Get specific model version from registry"""
@@ -68,6 +95,7 @@ def get_model_version(model_name: str, version: Optional[str] = None, stage: Opt
 def load_model_from_registry(model_name: str, version: str):
     """Load model and tokenizer from registry using mlflow.transformers.load_model"""
     try:
+        # encoded_name = encode_model_name(model_name)
         model_uri = f"models:/{model_name}/{version}"
         logger.info(f"Loading model from URI: {model_uri}")
         
@@ -144,10 +172,13 @@ def load_and_preprocess_from_blob(
 def promote_to_challenger(model_name: str, version: str, run_id: Optional[str] = None) -> bool:
     """Promote model to challenger alias"""
     try:
-        # Remove existing challenger alias if exists
-        existing_challenger = client.get_model_version_by_alias(model_name, "challenger")
-        if existing_challenger:
-            client.delete_registered_model_alias(model_name, "challenger")
+        try:
+            existing_challenger = client.get_model_version_by_alias(model_name, "challenger")
+            if existing_challenger:
+                client.delete_registered_model_alias(model_name, "challenger")
+        except mlflow.exceptions.RestException as e:
+            if "Registered model alias challenger not found" not in str(e):
+                raise  # only ignore specific alias-not-found error
         
         # Set new challenger alias
         client.set_registered_model_alias(model_name, "challenger", version)
@@ -169,133 +200,163 @@ def promote_to_challenger(model_name: str, version: str, run_id: Optional[str] =
 def promote_to_champion(model_name: str, challenger_version: str, run_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Compare challenger with current champion and promote if challenger is better.
+    Champion and challenger can be completely different models (different base models).
     Returns detailed comparison results.
     """
+    # Ensure champion_comparison is always defined
+    champion_comparison = {
+        "champion_model_name": None,
+        "champion_version": None,
+        "champion_f1": None,
+        "champion_accuracy": None
+    }
+
     try:
-        # Get current champion
-        champion_model_version = client.get_model_version_by_alias(model_name, "champion")
+        # Get current champion info using helper function
+        champion_info = get_current_champion()
+        champion_model_version = None
+        champion_model_name = None
+        champion_version = None
         
+        if champion_info:
+            champion_model_name, champion_version = champion_info
+            try:
+                champion_model_version = client.get_model_version(champion_model_name, champion_version)
+                logger.info(f"Found existing champion: {champion_model_name} v{champion_version}")
+            except Exception as e:
+                logger.error(f"Error getting champion model version: {e}")
+                champion_model_version = None
+        else:
+            logger.info("No existing champion found across all models")
+
         # Load challenger model
         challenger_mgr = load_model_from_registry(model_name, challenger_version)
         logger.info(f"Loaded challenger model {model_name} v{challenger_version}")
-        
+
         # Load evaluation dataset with challenger's tokenizer
-        eval_ds = load_and_preprocess_from_blob(
+        challenger_eval_ds = load_and_preprocess_from_blob(
             tokenizer=challenger_mgr.tokenizer,
             label_map=COMMON_SENTIMENT_MAPPINGS.get('text')
         )
-        
-        if not eval_ds:
-            raise ValueError("Failed to load evaluation dataset")
-        
+
+        if not challenger_eval_ds:
+            raise ValueError("Failed to load evaluation dataset for challenger")
+
         # Evaluate challenger
-        challenger_metrics = challenger_mgr.evaluate(eval_ds, batch_size=32)
+        challenger_metrics = challenger_mgr.evaluate(challenger_eval_ds, batch_size=32)
         challenger_f1 = challenger_metrics.get("f1", 0.0)
         challenger_accuracy = challenger_metrics.get("accuracy", 0.0)
-        
-        logger.info(f"Challenger metrics - Accuracy: {challenger_accuracy:.4f}, F1: {challenger_f1:.4f}")
-        
+
+        logger.info(f"Challenger ({model_name} v{challenger_version}) metrics - Accuracy: {challenger_accuracy:.4f}, F1: {challenger_f1:.4f}")
+
         # Log challenger metrics if run_id provided
         if run_id:
             for k, v in challenger_metrics.items():
                 if isinstance(v, (int, float)):
                     mlflow.log_metric(f"challenger_{k}", v)
-        
-        champion_comparison = {
-            "champion_version": None,
-            "champion_f1": None,
-            "champion_accuracy": None
-        }
-        
+
         # Compare with champion if exists
         promote_challenger = True  # Default to True if no champion exists
-        
-        if champion_model_version:
-            champion_version = champion_model_version.version
-            logger.info(f"Found existing champion: v{champion_version}")
-            
-            # Load champion model
-            champion_mgr = load_model_from_registry(model_name, champion_version)
-            
+
+        if champion_model_version and champion_model_name and champion_version:
+            logger.info(f"Comparing challenger ({model_name} v{challenger_version}) with existing champion ({champion_model_name} v{champion_version})")
+
+            # Load champion model - note: could be a completely different model
+            champion_mgr = load_model_from_registry(champion_model_name, champion_version)
+
             # Load evaluation dataset with champion's tokenizer (separate evaluation)
+            # This is important because champion might have different tokenizer/preprocessing
             champion_eval_ds = load_and_preprocess_from_blob(
                 tokenizer=champion_mgr.tokenizer,
                 label_map=COMMON_SENTIMENT_MAPPINGS.get('text')
             )
-            
+
             if champion_eval_ds:
-                # Evaluate champion
+                # Evaluate champion on the same task but with its own preprocessing
                 champion_metrics = champion_mgr.evaluate(champion_eval_ds, batch_size=32)
                 champion_f1 = champion_metrics.get("f1", 0.0)
                 champion_accuracy = champion_metrics.get("accuracy", 0.0)
-                
-                logger.info(f"Champion metrics - Accuracy: {champion_accuracy:.4f}, F1: {champion_f1:.4f}")
-                
+
+                logger.info(f"Champion ({champion_model_name} v{champion_version}) metrics - Accuracy: {champion_accuracy:.4f}, F1: {champion_f1:.4f}")
+
                 # Log champion metrics if run_id provided
                 if run_id:
                     for k, v in champion_metrics.items():
                         if isinstance(v, (int, float)):
                             mlflow.log_metric(f"champion_{k}", v)
-                
+
                 champion_comparison.update({
+                    "champion_model_name": champion_model_name,
                     "champion_version": champion_version,
                     "champion_f1": champion_f1,
                     "champion_accuracy": champion_accuracy
                 })
-                
+
                 # Compare F1 scores to decide promotion
                 promote_challenger = challenger_f1 > champion_f1
-                
-                logger.info(f"Comparison - Challenger F1: {challenger_f1:.4f} vs Champion F1: {champion_f1:.4f}")
-                logger.info(f"Promote challenger: {promote_challenger}")
+
+                logger.info(f"Model Comparison:")
+                logger.info(f"  Challenger: {model_name} v{challenger_version} - F1: {challenger_f1:.4f}")
+                logger.info(f"  Champion: {champion_model_name} v{champion_version} - F1: {champion_f1:.4f}")
+                logger.info(f"  Promote challenger: {promote_challenger}")
             else:
-                logger.warning("Failed to load evaluation dataset for champion, promoting challenger by default")
+                logger.warning(f"Failed to load evaluation dataset for champion ({champion_model_name} v{champion_version}), promoting challenger by default")
         else:
             logger.info("No existing champion found, promoting challenger")
-        
+
         # Promote challenger to champion if better
         promoted = False
         if promote_challenger:
-            # Remove existing champion alias if exists
+            # Remove existing champion alias if it exists
             if champion_model_version:
-                client.delete_registered_model_alias(model_name, "champion")
-            
-            # Set new champion alias
+                try:
+                    # Remove champion alias from the current champion model
+                    client.delete_registered_model_alias(champion_model_name, "champion")
+                    logger.info(f"Removed champion alias from {champion_model_name}")
+                except Exception as delete_error:
+                    logger.warning(f"Failed to delete existing champion alias: {delete_error}")
+
+            # Set new champion - assign "champion" alias to the challenger
             client.set_registered_model_alias(model_name, "champion", challenger_version)
-            
-            # Set promotion tags
+
+            # Add promotion metadata
             timestamp = datetime.now().isoformat()
             client.set_model_version_tag(model_name, challenger_version, "promotion.champion_date", timestamp)
             if run_id:
                 client.set_model_version_tag(model_name, challenger_version, "promotion.champion_run_id", run_id)
             
+            # Log what model was replaced (if any)
+            if champion_model_name and champion_version:
+                client.set_model_version_tag(model_name, challenger_version, "promotion.replaced_champion", f"{champion_model_name}_v{champion_version}")
+
             promoted = True
-            logger.info(f"Successfully promoted {model_name} v{challenger_version} to champion")
+            logger.info(f"Successfully promoted {model_name} v{challenger_version} to champion (replaced {champion_model_name} v{champion_version} if existed)")
         else:
-            logger.info(f"Challenger not promoted - champion performs better")
-        
+            logger.info(f"Challenger {model_name} v{challenger_version} not promoted - champion {champion_model_name} v{champion_version} performs better")
+
         return {
             "status": "success",
             "promoted": promoted,
+            "challenger_model_name": model_name,
             "challenger_version": challenger_version,
             "challenger_f1": challenger_f1,
             "challenger_accuracy": challenger_accuracy,
             "champion_comparison": champion_comparison
         }
-        
+
     except Exception as e:
-        error_msg = f"Failed to promote to champion: {e}"
+        error_msg = f"Failed to promote {model_name} v{challenger_version} to champion: {e}"
         logger.error(error_msg)
         return {
             "status": "failed",
             "error": error_msg,
             "promoted": False,
+            "challenger_model_name": model_name,
             "challenger_version": challenger_version,
             "challenger_f1": None,
             "challenger_accuracy": None,
             "champion_comparison": champion_comparison
         }
-
 
 # ==== Core validation function ====
 def validate_model_performance(

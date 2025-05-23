@@ -5,9 +5,11 @@ __pycache__/
 # Environment / Secrets
 .env
 testvm_key.pem
+llm.large.pem
 cookies.json
 credentials.env
 venv/
+twit/
 
 # VSCode or other editor folders (optional)
 .vscode/

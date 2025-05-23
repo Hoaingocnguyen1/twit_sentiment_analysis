@@ -11,6 +11,7 @@ import io
 import pandas as pd
 from typing import List, Optional, Tuple
 from dotenv import load_dotenv
+import urllib.parse
 script_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.dirname(os.path.dirname(script_dir))
 sys.path.append(root_dir)
@@ -40,6 +41,9 @@ logger.info(f"Tracking URI: {tracking_uri}")
 logger.info(f"Artifact URI: {artifact_uri}")
 
 client = MlflowClient(tracking_uri=tracking_uri)
+
+def encode_model_name(name: str) -> str:
+    return urllib.parse.quote(name, safe='')
 
 def load_and_preprocess_from_blob(
     tokenizer, max_length: int = 128, label_map: Optional[dict] = None,
@@ -119,7 +123,8 @@ def train_model(manager, run_id, train_ds, eval_ds, params):
 
 def register_model(model_name, run_id, training_results):
     try:
-        latest_versions = client.get_latest_versions(model_name)
+        encoded_name = encode_model_name(model_name)
+        latest_versions = client.get_latest_versions(encoded_name)
         max_version = max([int(v.version) for v in latest_versions]) if latest_versions else 0
         next_version = str(max_version + 1)
     except Exception:
@@ -127,7 +132,7 @@ def register_model(model_name, run_id, training_results):
 
     tags = {
         'model_type': 'sentiment_analysis',
-        'base_model': model_name,
+        'base_model': encoded_name,
         'version': next_version,
         'framework': 'transformers',
         'registered_by': getpass.getuser(),
@@ -138,21 +143,21 @@ def register_model(model_name, run_id, training_results):
 
     uri = f"runs:/{run_id}/model"
     try:
-        client.get_registered_model(model_name)
+        client.get_registered_model(encoded_name)
     except Exception:
-        client.create_registered_model(model_name)
+        client.create_registered_model(encoded_name)
 
     mv = client.create_model_version(
-        name=model_name,
+        name=encoded_name,
         source=uri,
         run_id=run_id
     )
 
     for k, v in tags.items():
-        client.set_model_version_tag(model_name, mv.version, k, v)
+        client.set_model_version_tag(encoded_name, mv.version, k, v)
 
     client.transition_model_version_stage(
-        name=model_name,
+        name=encoded_name,
         version=mv.version,
         stage='Staging',
         archive_existing_versions=False
@@ -161,11 +166,11 @@ def register_model(model_name, run_id, training_results):
     aliases = [f"v{next_version}", next_version, datetime.datetime.now().strftime("%Y%m%d")]
     for alias in aliases:
         try:
-            client.set_registered_model_alias(name=model_name, alias=alias, version=mv.version)
+            client.set_registered_model_alias(name=encoded_name, alias=alias, version=mv.version)
         except Exception as e:
             logger.warning(f"Could not set alias {alias}: {e}")
 
-    logger.info(f"Registered {model_name} v{mv.version}")
+    logger.info(f"Registered {encoded_name} v{mv.version}")
     return str(mv.version)
 
     

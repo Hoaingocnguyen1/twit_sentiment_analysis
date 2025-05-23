@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def get_data_from_db(columns: Optional[List[str]] = None, limit: int = 10
+def get_data_from_db(columns: Optional[List[str]] = None, limit: int = 30
                     ) -> Tuple[Optional[List[str]], Optional[List[str]], Optional[List], Optional[List]]:
     """
     Lấy dữ liệu tweet mới 7 ngày gần đây chưa xử lý, gọi label_data để gán nhãn, chia train/test.
@@ -148,34 +148,34 @@ def load_and_preprocess_from_blob(
         return None, None
 
 
-# if __name__ == "__main__":
-#     try:
-#         model_name = "answerdotai/ModernBERT-base"
-#         logger.info(f"Khởi tạo tokenizer từ model {model_name}...")
-#         tokenizer = AutoTokenizer.from_pretrained(model_name)
+if __name__ == "__main__":
+    try:
+        model_name = "answerdotai/ModernBERT-base"
+        logger.info(f"Khởi tạo tokenizer từ model {model_name}...")
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-#         logger.info("Bắt đầu lấy và gán nhãn dữ liệu từ DB...")
-#         X_train, X_test, y_train, y_test = get_data_from_db()
+        logger.info("Bắt đầu lấy và gán nhãn dữ liệu từ DB...")
+        X_train, X_test, y_train, y_test = get_data_from_db()
 
-#         if X_train is None:
-#             logger.error("Lấy dữ liệu từ DB thất bại, thoát.")
-#             sys.exit(1)
+        if X_train is None:
+            logger.error("Lấy dữ liệu từ DB thất bại, thoát.")
+            sys.exit(1)
 
-#         logger.info(f"Tổng số mẫu - train: {len(X_train)}, test: {len(X_test)}")
+        logger.info(f"Tổng số mẫu - train: {len(X_train)}, test: {len(X_test)}")
 
-#         logger.info("Lưu dữ liệu train/test lên blob storage...")
-#         if not save_train_test_to_blob_in_memory(X_train, X_test, y_train, y_test):
-#             logger.error("Lưu dữ liệu lên blob thất bại, thoát.")
-#             sys.exit(1)
+        logger.info("Lưu dữ liệu train/test lên blob storage...")
+        if not save_train_test_to_blob_in_memory(X_train, X_test, y_train, y_test):
+            logger.error("Lưu dữ liệu lên blob thất bại, thoát.")
+            sys.exit(1)
 
-#         logger.info("Tải dữ liệu từ blob và tiền xử lý...")
-#         train_dataset, test_dataset = load_and_preprocess_from_blob(tokenizer)
+        logger.info("Tải dữ liệu từ blob và tiền xử lý...")
+        train_dataset, test_dataset = load_and_preprocess_from_blob(tokenizer)
 
-#         if train_dataset is None:
-#             logger.error("Tải hoặc tiền xử lý dữ liệu thất bại, thoát.")
-#             sys.exit(1)
+        if train_dataset is None:
+            logger.error("Tải hoặc tiền xử lý dữ liệu thất bại, thoát.")
+            sys.exit(1)
 
-#         logger.info(f"Tạo dataset thành công: train size = {len(train_dataset)}, test size = {len(test_dataset)}")
+        logger.info(f"Tạo dataset thành công: train size = {len(train_dataset)}, test size = {len(test_dataset)}")
 
 #         # Hiển thị 1 sample để kiểm tra
 #         sample_idx = 0
@@ -190,7 +190,7 @@ def load_and_preprocess_from_blob(
 
 #         logger.info("Pipeline test hoàn tất thành công!")
 
-#     except Exception as e:
-#         logger.error(f"Lỗi trong quá trình chạy pipeline: {e}")
-#         logger.error(traceback.format_exc())
-#         sys.exit(1)
+    except Exception as e:
+        logger.error(f"Lỗi trong quá trình chạy pipeline: {e}")
+        logger.error(traceback.format_exc())
+        sys.exit(1)
