@@ -8,6 +8,11 @@ x-airflow-common-env: &airflow-common-env
   AIRFLOW__CORE__BASE_LOG_FOLDER: /opt/airflow/logs
   AIRFLOW__WEBSERVER__SECRET_KEY: "my_ultra_secret_key_123456"
   AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8080
+  AIRFLOW__WEBSERVER__WEB_SERVER_HOST: 0.0.0.0
+  AIRFLOW__WEBSERVER__WEB_SERVER_PORT: 8080
+  AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+  AIRFLOW__LOGGING__REMOTE_LOGGING: 'false'
+  AIRFLOW__CORE__ENABLE_XCOM_PICKLING: 'true'
   PYTHONPATH: /opt/airflow
 
 # --- common service definition for Airflow ---
@@ -20,6 +25,7 @@ x-airflow-common: &airflow-common
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/plugins:/opt/airflow/plugins
+    - ./airflow/logs:/opt/airflow/logs
     - ./src:/opt/airflow/src
     - ./config:/opt/airflow/config
     - ./airflow/requirements.txt:/requirements.txt
@@ -27,6 +33,7 @@ x-airflow-common: &airflow-common
     - ./.env:/opt/airflow/.env
   networks:
     - your_project_net
+  restart: unless-stopped
 
 # --- logging configuration anchor ---
 x-log-config: &log-config
@@ -71,51 +78,97 @@ services:
       timeout: 10s
       retries: 5
 
-  # fastapi:
-  #   build:
-  #     context: .
-  #     dockerfile: mlflow/Dockerfile.api
-  #   container_name: fastapi_service
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
-  #     - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
-  #     - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
-  #     - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
-  #     - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
-  #     - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
-  #     - MODEL_NAME=${MODEL_NAME}
-  #   volumes:
-  #     - ./mlflow:/api
-  #     - ./src:/api/src
-  #   networks:
-  #     - monitoring
-  #     - your_project_net
+  fastapi:
+    build:
+      context: .
+      dockerfile: sentimentAPI/Dockerfile.api
+    container_name: fastapi_service
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
+      - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
+      - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
+      - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - MODEL_NAME=${MODEL_NAME}
+    volumes:
+      - ./sentimentAPI:/api
+      - ./src:/api/src
+    networks:
+      - monitoring
+      - your_project_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      <<: *log-config
 
-  # prometheus:
-  #   image: prom/prometheus
-  #   container_name: prometheus_b
-  #   volumes:
-  #     - ./mlflow/prometheus.yml:/etc/prometheus/prometheus.yml
-  #     - prometheus_data:/prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   networks:
-  #     - monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./sentimentAPI/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      <<: *log-config
 
-  # grafana:
-  #   image: grafana/grafana
-  #   container_name: grafana_a
-  #   ports:
-  #     - "3000:3000"
-  #   networks:
-  #     - monitoring
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      <<: *log-config
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
 networks:
-  # monitoring:
+  monitoring:
+    driver: bridge
   your_project_net:
     driver: bridge
-
-# volumes:
-#   prometheus_data:

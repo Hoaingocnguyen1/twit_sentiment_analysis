@@ -6,9 +6,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from app.dependencies import model_store
+from app.dependencies import transformer_store
 from app.models import PredictInput, ErrorResponse
-from mlflow.pyfunc import PyFuncModel
 from typing import List
 import time
 from dotenv import load_dotenv
@@ -111,9 +110,9 @@ api.add_middleware(
 
 @api.get("/health")
 async def health_check():
-    is_ok = model_store.model is not None
+    is_ok = transformer_store.model is not None
     HEALTH_STATUS.set(1 if is_ok else 0)
-    MODEL_INFO.labels(version_uri=str(model_store.version)).set(1)
+    MODEL_INFO.labels(version_uri=str(transformer_store.version)).set(1)
     return {"status": "ok" if is_ok else "model_error", "health": is_ok}
 
 
@@ -122,8 +121,8 @@ async def reload_model():
     outcome = "success"
     start_time = time.time()
     try:
-        model_store.reload()
-        if model_store.model is None:
+        transformer_store.reload()
+        if transformer_store.model is None:
             return {"message": "Champion model not reloaded."}
         return {"message": "Champion model reloaded."}
     except Exception as e:
@@ -150,10 +149,11 @@ async def predict_sentiment(input_data: PredictInput) -> List[int]:
     Returns a list of integers: 0=NEGATIVE, 1=NEUTRAL, 2=POSITIVE.
     If a single text was provided, the list will contain one element.
     """
-    if model_store.model is None:
+    if transformer_store.model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     start = time.time()
     outcome = "success"
+    predictions = []
     try:
         texts = input_data.texts  # populated via validator
         if not texts:
@@ -163,20 +163,21 @@ async def predict_sentiment(input_data: PredictInput) -> List[int]:
 
         logger.debug(f"Received {len(texts)} texts for prediction")
 
-        predictions = model_store.predict(texts)
+        predictions = transformer_store.predict(texts)
         return predictions
 
     except Exception as e:
+        outcome = "error"
         logger.exception("Error in /predict endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
         dur = time.time() - start
-        PREDICT_DURATION.labels(model_version=model_store.version).observe(dur)
+        PREDICT_DURATION.labels(model_version=transformer_store.version).observe(dur)
         if predictions:
             for pred in predictions:
                 PREDICT_COUNTER.labels(
-                    model_version=model_store.version,
+                    model_version=transformer_store.version,
                     outcome=outcome,
                     predicted_label=(
                         LABEL_MAP[pred] if outcome == "success" else "error"
