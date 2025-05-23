@@ -1,4 +1,4 @@
-# # --- common environment for Airflow services ---
+# --- common environment for Airflow services ---
 x-airflow-common-env: &airflow-common-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql://hoaingocnguyen:Hn20052004!@twitwarehouse.postgres.database.azure.com:5432/postgres?sslmode=require
@@ -24,6 +24,8 @@ x-airflow-common: &airflow-common
     - ./airflow/requirements.txt:/requirements.txt
     - ./config/cookies.json:/opt/airflow/cookies.json
     - ./.env:/opt/airflow/.env
+  networks:
+    - your_project_net
 
 # --- logging configuration anchor ---
 x-log-config: &log-config
@@ -33,7 +35,6 @@ x-log-config: &log-config
     max-file: "1"
 
 services:
-  # Airflow Webserver
   airflow-webserver:
     <<: *airflow-common
     hostname: airflow-webserver
@@ -54,7 +55,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # Airflow Scheduler
   airflow-scheduler:
     <<: *airflow-common
     hostname: airflow-scheduler
@@ -67,6 +67,52 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: mlflow/Dockerfile.api
+    container_name: fastapi_service
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER}
+      - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
+      - AZURE_SAS_TOKEN=${AZURE_SAS_TOKEN}
+      - AZURE_STORAGE_ACCESS_KEY=${AZURE_STORAGE_ACCESS_KEY}
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - MODEL_NAME=${MODEL_NAME}
+    volumes:
+      - ./mlflow:/api
+      - ./src:/api/src
+    networks:
+      - monitoring
+      - your_project_net
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus_b
+    volumes:
+      - ./mlflow/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana_a
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring
+
 networks:
+  monitoring:
   your_project_net:
     driver: bridge
+
+volumes:
+  prometheus_data:
