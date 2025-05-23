@@ -55,5 +55,5 @@ jobs:
     - name: Pull and verify Docker images
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
-        docker pull hoaingocnguyen/fastapi_service:latest
+        docker pull hoaingocnguyen/twit_sentiment_analysis-fastapi:latest
         docker inspect hoaingocnguyen/twit_sentiment_analysis-fastapi:latest
